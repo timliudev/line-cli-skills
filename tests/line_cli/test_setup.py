@@ -459,7 +459,7 @@ def test_doctor_not_logged_in_and_old_version_and_update(fake_line, capsys):
     assert items["update"]["status"] == "warn" and items["update"]["fix"] == "brew upgrade line-cli"
 
 
-def test_doctor_update_check_offline_is_only_a_warning(fake_line, capsys):
+def test_doctor_update_check_offline_is_only_a_warning(fake_line, capsys, no_keyring_check):
     fake_line.scenario(
         [
             rule(["version"], stdout="line v0.4.0"),
