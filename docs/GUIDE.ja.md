@@ -83,6 +83,7 @@ Claude は、プラグインの `skills/media-digest/scripts` フォルダから
 | `line_path` | 特定の `line` プログラムを使用します（フォークや固定ビルドなど） |
 | `archive_root` | アーカイブの保存先（環境変数 `LINE_SKILL_ARCHIVE` でも指定でき、そちらが優先されます）。既定：`%LOCALAPPDATA%\line-skill\archive`（Windows）、`~/Library/Application Support/line-skill/archive`（macOS）、`~/.local/share/line-skill/archive`（Linux） |
 | `download.types`, `download.max_bytes` | 自動でダウンロードする添付の種類（`image`、`video`、`audio`、`file`）と、サイズ上限（バイト数。既定は20 MiB で、本クライアントが取得できる上限でもあります） |
+| `render.quiet_gap_days` | `messages.md` で、隣り合う2件のメッセージがこの日数より離れているとき「no messages for X days」の行を挿入します（既定 3。`0` で無効） |
 
 **`media-digest`**（Windows では `%APPDATA%\media-digest\config.toml`、それ以外では `~/.config/media-digest/config.toml`。`MEDIA_DIGEST_CONFIG` で変更できます）：
 

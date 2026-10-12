@@ -44,7 +44,7 @@ sync.py --all [same options]
 ```
 <archive_root>/
 |- contacts.json                      sender name cache (mid -> display name)
-`- <chat_id>__<chat name>/            keyed by ID; a rename only changes the part after "__"
+`- <chat name>__<chat_id>/            keyed by ID; a rename only changes the part before "__"
    |- messages.jsonl                  source of truth: one raw `line messages --json` item per line
    |- messages.md                     generated for reading; times are local to the machine
    |- state.json                      last sync time, newest message, gaps, failed downloads
@@ -52,7 +52,13 @@ sync.py --all [same options]
 ```
 
 - Folder names are made safe for Windows: reserved characters and names are replaced, and the chat
-  name part is capped at 60 characters.
+  name part is capped at 60 characters (the chat ID is never shortened). When the name is unknown
+  the folder is just `<chat_id>`.
+- Folders are found by chat ID: the current `<name>__<chat_id>`, a bare `<chat_id>`, and the older
+  `<chat_id>__<name>` layout all match, and the next sync renames them to the current layout
+  (contents untouched). When no name is given and none is stored, a single-chat sync looks the name
+  up (direct chats via contacts, groups and rooms via `chats --limit 0 --show-ids`, one call per
+  run); if that fails the folder stays id-only, silently.
 - `messages.jsonl` holds the CLI's items unchanged plus one archive-only field,
   `possibly_unsent_at` (ISO UTC time). Deleting `messages.md` is harmless; the next sync rebuilds it.
 - Reactions and decryption results of messages still inside the latest 100 are refreshed. A
@@ -61,6 +67,11 @@ sync.py --all [same options]
   (`- 14:03 **Sender**: text`), continuation lines indented, `Me` for the user's own messages.
   Attachments are relative links (`[Image](files/...)`); failures read `[Image] expired ...`,
   `[Video] over 20 MiB, not downloaded`, `[File: x.zip] external link, cannot be downloaded`.
+  Other content types read `[System event (type 18)]` or `[Unsupported content (type N)]`
+  (stickers, contact cards and rich messages have their own labels); no meaning is guessed.
+  Between two messages more than `render.quiet_gap_days` days apart (default 3, `0` disables) a line
+  `— no messages for X days (YYYY-MM-DD → YYYY-MM-DD) —` is added; it is only a fact about the
+  archive and unrelated to the possible-gap marker below.
   Markers: `(possibly unsent)` after a message, and a `> ⚠ Possible gap ...` quote between messages.
 - File extensions: content type 1 `.jpg`, 2 `.mp4`, 3 `.m4a`, 14 the sanitized extension of
   `file_name` (`.bin` if none). The first bytes of the file then correct the extension for jpg,
@@ -84,6 +95,8 @@ archive_root = "D:/somewhere/line-personal"
 [download]
 types = ["image", "video", "audio", "file"]   # attachment types downloaded automatically
 max_bytes = 20971520                          # larger attachments are only marked in messages.md
+[render]
+quiet_gap_days = 3                            # messages.md notes silences longer than this; 0 = off
 ```
 
 `max_bytes` cannot raise the CLI's own 20 MiB cap; it can only lower it. A file over the limit is

@@ -83,6 +83,7 @@ Claude จะรัน `digest.py FILE... --out OUTDIR` จากโฟลเด
 | `line_path` | ใช้โปรแกรม `line` ที่ระบุ (เช่น fork หรือบิลด์ที่ตรึงเวอร์ชันไว้) |
 | `archive_root` | ตำแหน่งที่เก็บคลัง (ตั้งผ่านตัวแปรสภาพแวดล้อม `LINE_SKILL_ARCHIVE` ได้เช่นกัน และมีลำดับความสำคัญสูงกว่า) ค่าเริ่มต้น: `%LOCALAPPDATA%\line-skill\archive` (Windows), `~/Library/Application Support/line-skill/archive` (macOS), `~/.local/share/line-skill/archive` (Linux) |
 | `download.types`, `download.max_bytes` | ประเภทไฟล์แนบที่ดาวน์โหลดอัตโนมัติ (`image`, `video`, `audio`, `file`) และขีดจำกัดขนาดเป็นไบต์ (ค่าเริ่มต้น 20 MiB ซึ่งเป็นค่าสูงสุดที่ไคลเอนต์นี้ดึงได้) |
+| `render.quiet_gap_days` | ใน `messages.md` จะแทรกบรรทัด "no messages for X days" เมื่อข้อความสองข้อความติดกันห่างกันเกินจำนวนวันนี้ (ค่าเริ่มต้น 3; `0` คือปิด) |
 
 **`media-digest`** (`%APPDATA%\media-digest\config.toml` บน Windows มิฉะนั้นคือ `~/.config/media-digest/config.toml` เขียนทับได้ด้วย `MEDIA_DIGEST_CONFIG`):
 

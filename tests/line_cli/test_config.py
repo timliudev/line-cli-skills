@@ -6,7 +6,7 @@ from linecore import config as cfg
 
 def write_config(base: Path, text: str) -> Path:
     path = base / "line-skill" / "config.toml"
-    path.parent.mkdir(parents=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
     return path
 
@@ -139,3 +139,15 @@ def test_unknown_keys_are_warnings(tmp_path):
     write_config(base, 'colour = "red"\n[download]\nspeed = 1\n')
     conf = cfg.load_config({"XDG_CONFIG_HOME": str(base), "HOME": str(tmp_path)}, "linux")
     assert len(conf.warnings) == 2
+
+
+def test_render_quiet_gap_days_default_custom_and_invalid(tmp_path):
+    env = {"XDG_CONFIG_HOME": str(tmp_path / "x"), "HOME": str(tmp_path)}
+    assert cfg.load_config(env, "linux").render_quiet_gap_days == 3
+    write_config(tmp_path / "x", "[render]\nquiet_gap_days = 0\n")
+    conf = cfg.load_config(env, "linux")
+    assert conf.render_quiet_gap_days == 0
+    assert conf.to_dict()["render"] == {"quiet_gap_days": 0}
+    write_config(tmp_path / "x", "[render]\nquiet_gap_days = -1\n")
+    with pytest.raises(cfg.ConfigError):
+        cfg.load_config(env, "linux")

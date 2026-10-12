@@ -17,6 +17,8 @@ from .store import safe_id
 SELF_LABEL = "Me"
 REACTIONS = {2: "like", 3: "love", 4: "laugh", 5: "surprise", 6: "sad", 7: "angry"}
 UNSUPPORTED = {7: "Sticker", 13: "Contact card", 22: "Rich message"}
+SYSTEM_EVENT_TYPE = 18  # shown as a neutral label; what it means is not known
+DEFAULT_QUIET_GAP_DAYS = 3
 POSSIBLY_UNSENT = "(possibly unsent)"
 GAP_TEXT = "⚠ Possible gap: messages between the previous ones and here may be missing."
 FAILURE_TEXT = {
@@ -107,9 +109,12 @@ def body_text(
     if status == "decryption_failed":
         detail = record.get("error")
         return f"[could not decrypt: {detail}]" if detail else "[could not decrypt]"
+    ctype = record.get("content_type")
+    if ctype == SYSTEM_EVENT_TYPE:
+        return f"[System event (type {ctype})]"
     if status == "unsupported":
-        label = UNSUPPORTED.get(record.get("content_type"))
-        return f"[{label}]" if label else f"[Unsupported message type {record.get('content_type')}]"
+        label = UNSUPPORTED.get(ctype)
+        return f"[{label}]" if label else f"[Unsupported content (type {ctype})]"
     text = record.get("text")
     return text if isinstance(text, str) and text else "(empty message)"
 
@@ -148,6 +153,7 @@ def render_markdown(
     synced_at: datetime,
     tz: tzinfo | None = None,
     link_prefix: str = "files/",
+    quiet_gap_days: int = DEFAULT_QUIET_GAP_DAYS,
 ) -> Rendered:
     order = sorted(
         enumerate(records),
@@ -178,6 +184,7 @@ def render_markdown(
     lines.append("")
 
     current_day: str | None = None
+    previous: datetime | None = None
     for rec in ordered:
         when = _fmt_time(rec.get("created_time"), tz)
         day = f"{when:%Y-%m-%d}" if when else "Unknown date"
@@ -187,9 +194,19 @@ def render_markdown(
                 lines.append("")
             lines.append(f"> {GAP_TEXT}")
             lines.append("")
+        quiet = None
+        if when and previous and quiet_gap_days > 0:
+            days = (when.date() - previous.date()).days
+            if days > quiet_gap_days:
+                quiet = f"— no messages for {days} days ({previous:%Y-%m-%d} → {when:%Y-%m-%d}) —"
+        if when:
+            previous = when
         if day != current_day:
             current_day = day
             if lines[-1] != "":
+                lines.append("")
+            if quiet:
+                lines.append(quiet)
                 lines.append("")
             lines.append(f"## {day}")
             lines.append("")

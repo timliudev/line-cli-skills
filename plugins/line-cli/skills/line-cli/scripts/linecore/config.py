@@ -27,7 +27,9 @@ ARCHIVE_ENV = "LINE_SKILL_ARCHIVE"
 
 DOWNLOAD_TYPES = ("image", "video", "audio", "file")
 DEFAULT_MAX_BYTES = 20 * 1024 * 1024  # 20971520, upstream's attachment cap
-KNOWN_KEYS = {"line_path", "archive_root", "download"}
+KNOWN_KEYS = {"line_path", "archive_root", "download", "render"}
+KNOWN_RENDER_KEYS = {"quiet_gap_days"}
+DEFAULT_QUIET_GAP_DAYS = 3
 KNOWN_DOWNLOAD_KEYS = {"types", "max_bytes"}
 
 
@@ -100,6 +102,7 @@ class Config:
     config_path: Path
     config_exists: bool
     warnings: tuple[str, ...] = field(default_factory=tuple)
+    render_quiet_gap_days: int = DEFAULT_QUIET_GAP_DAYS
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -112,6 +115,7 @@ class Config:
                 "types": list(self.download_types),
                 "max_bytes": self.download_max_bytes,
             },
+            "render": {"quiet_gap_days": self.render_quiet_gap_days},
             "warnings": list(self.warnings),
         }
 
@@ -178,6 +182,15 @@ def load_config(env: Mapping[str, str] | None = None, os_name: str | None = None
     if isinstance(max_bytes, bool) or not isinstance(max_bytes, int) or max_bytes <= 0:
         raise ConfigError(f"{cfg_path}: `download.max_bytes` must be a positive integer")
 
+    render = raw.get("render", {})
+    if not isinstance(render, dict):
+        raise ConfigError(f"{cfg_path}: `render` must be a table")
+    for key in sorted(set(render) - KNOWN_RENDER_KEYS):
+        warnings.append(f"unknown key `render.{key}` in {cfg_path} (ignored)")
+    quiet = render.get("quiet_gap_days", DEFAULT_QUIET_GAP_DAYS)
+    if isinstance(quiet, bool) or not isinstance(quiet, int) or quiet < 0:
+        raise ConfigError(f"{cfg_path}: `render.quiet_gap_days` must be an integer >= 0")
+
     env_archive = (env.get(ARCHIVE_ENV) or "").strip()
     cfg_archive = _str_key(raw, "archive_root", cfg_path)
     if env_archive:
@@ -196,6 +209,7 @@ def load_config(env: Mapping[str, str] | None = None, os_name: str | None = None
         config_path=cfg_path,
         config_exists=exists,
         warnings=tuple(warnings),
+        render_quiet_gap_days=quiet,
     )
 
 

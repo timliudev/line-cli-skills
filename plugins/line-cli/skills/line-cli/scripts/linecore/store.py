@@ -60,28 +60,40 @@ def safe_id(message_id: str) -> str:
 
 
 def folder_name(chat_id: str, chat_name: str | None) -> str:
+    """``<name>__<chat_id>``; just ``<chat_id>`` when the name is unknown or has no usable text."""
     base = safe_id(chat_id)
     name = safe_name(chat_name, fallback="") if chat_name else ""
-    return f"{base}__{name}" if name else base
+    return f"{name}__{base}" if name else base
 
 
 def find_chat_dir(archive_root: Path, chat_id: str) -> Path | None:
-    """The existing folder for ``chat_id`` (keyed by ID, so renames never split an archive)."""
+    """The existing folder for ``chat_id`` (keyed by ID, so renames never split an archive).
+
+    Matches the current ``<name>__<id>``, a bare ``<id>``, and the old ``<id>__<name>`` layout.
+    """
     base = safe_id(chat_id)
     try:
         entries = sorted(archive_root.iterdir())
     except OSError:
         return None
     for entry in entries:
-        if entry.is_dir() and (entry.name == base or entry.name.startswith(base + "__")):
+        if entry.is_dir() and (
+            entry.name == base
+            or entry.name.endswith("__" + base)
+            or entry.name.startswith(base + "__")
+        ):
             return entry
     return None
 
 
 def folder_label(path: Path, chat_id: str) -> str | None:
-    """The name part of ``<chat_id>__<name>`` (None when the folder has no name part)."""
-    prefix = safe_id(chat_id) + "__"
-    return path.name[len(prefix) :] if path.name.startswith(prefix) else None
+    """The name part of the folder (None when the folder is the bare ID)."""
+    base = safe_id(chat_id)
+    if path.name.endswith("__" + base):
+        return path.name[: -len(base) - 2] or None
+    if path.name.startswith(base + "__"):  # old layout
+        return path.name[len(base) + 2 :] or None
+    return None
 
 
 # ---------------------------------------------------------------- atomic writes

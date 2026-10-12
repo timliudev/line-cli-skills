@@ -109,7 +109,7 @@ def run_sync(capsys, *argv):
 
 
 def archive_dir(root: Path, chat=CHAT) -> Path:
-    found = [p for p in root.iterdir() if p.is_dir() and p.name.startswith(chat)]
+    found = [p for p in root.iterdir() if p.is_dir() and chat in p.name]
     assert len(found) == 1, f"expected one archive folder for {chat}, got {found}"
     return found[0]
 

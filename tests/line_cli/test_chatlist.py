@@ -163,7 +163,7 @@ def test_sync_all_names_folders_from_active_listing(fake_line, archive_root, cap
     code, out = run_sync(capsys, "--all", "--no-download")
     assert code == 0 and out["failed"] == []
     folders = [p.name for p in archive_root.iterdir() if p.is_dir()]
-    assert folders == [f"{GID}__Team Alpha"]
+    assert folders == [f"Team Alpha__{GID}"]
 
 
 def test_sync_all_still_works_when_text_listing_fails(fake_line, archive_root, capsys):
@@ -176,3 +176,68 @@ def test_sync_all_still_works_when_text_listing_fails(fake_line, archive_root, c
     )
     code, out = run_sync(capsys, "--all", "--no-download")
     assert code == 0 and out["chats"][0]["chat_id"] == GID
+
+
+# ------------------------------------------------------------------ single-chat naming
+
+
+def test_single_sync_by_id_looks_up_group_name_and_renames_unnamed_folder(
+    fake_line, archive_root, capsys
+):
+    (archive_root / GID).mkdir(parents=True)  # archive created before names were looked up
+    fake_line.scenario(
+        base_rules(
+            rule(
+                ["chats", "--limit", "0", "--show-ids"],
+                stdout=listing(("Group", "Team Alpha", GID)),
+            ),
+            messages_rule([msg(1, 0, "hi", ALICE)]),
+        )
+    )
+    code, out = run_sync(capsys, GID, "--no-download")
+    assert code == 0 and out["chat"] == "Team Alpha"
+    assert [p.name for p in archive_root.iterdir() if p.is_dir()] == [f"Team Alpha__{GID}"]
+    md = (archive_root / f"Team Alpha__{GID}" / "messages.md").read_text(encoding="utf-8")
+    assert md.startswith("# Team Alpha")
+    listings = [a for a in fake_line.argv_calls() if a[:1] == ["chats"]]
+    assert len(listings) == 1
+
+
+def test_single_sync_keeps_id_only_folder_when_lookup_fails(fake_line, archive_root, capsys):
+    fake_line.scenario(
+        base_rules(
+            rule(["chats", "--limit", "0", "--show-ids"], exit=1, stderr="line: boom"),
+            messages_rule([msg(1, 0, "hi", ALICE)]),
+        )
+    )
+    code, out = run_sync(capsys, GID, "--no-download")
+    assert code == 0 and out["chat"] is None
+    assert [p.name for p in archive_root.iterdir() if p.is_dir()] == [GID]
+    assert out["warnings"] == []
+
+
+def test_old_format_folder_is_migrated_to_name_first_losslessly(fake_line, archive_root, capsys):
+    old = archive_root / f"{GID}__Old Name"
+    (old / "files").mkdir(parents=True)
+    (old / "files" / "keep.txt").write_text("x", encoding="utf-8")
+    fake_line.scenario(base_rules(messages_rule([msg(1, 0, "hi", ALICE)])))
+    code, _ = run_sync(capsys, GID, "--name", "Team Alpha", "--no-download")
+    assert code == 0
+    folders = [p.name for p in archive_root.iterdir() if p.is_dir()]
+    assert folders == [f"Team Alpha__{GID}"]
+    assert (archive_root / folders[0] / "files" / "keep.txt").is_file()
+
+
+def test_old_format_folder_keeps_its_name_when_no_new_name_is_known(
+    fake_line, archive_root, capsys
+):
+    (archive_root / f"{GID}__Old Name").mkdir(parents=True)
+    fake_line.scenario(
+        base_rules(
+            rule(["chats", "--limit", "0", "--show-ids"], exit=1, stderr="line: boom"),
+            messages_rule([msg(1, 0, "hi", ALICE)]),
+        )
+    )
+    code, out = run_sync(capsys, GID, "--no-download")
+    assert code == 0 and out["chat"] == "Old Name"
+    assert [p.name for p in archive_root.iterdir() if p.is_dir()] == [f"Old Name__{GID}"]

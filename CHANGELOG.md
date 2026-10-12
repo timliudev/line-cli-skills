@@ -5,6 +5,20 @@ All notable changes to this project are documented here. Format based on
 
 ## [Unreleased]
 
+### Fixed
+- `sync.py <CHAT_ID>` without `--name` no longer leaves the archive folder and the `messages.md`
+  title as the bare ID: the name is looked up (contacts for direct chats, one cached
+  `chats --limit 0 --show-ids` call for groups and rooms) and an id-only folder is renamed. If the
+  lookup fails the folder stays id-only, silently.
+
+### Changed
+- Archive folders are now named `<chat name>__<chat_id>` (name first, full ID kept intact, name
+  part truncated first). Existing `<chat_id>` and `<chat_id>__<name>` folders are found by ID and
+  renamed automatically on the next sync, contents untouched.
+- `messages.md`: content type 18 reads `[System event (type 18)]`, other unsupported types read
+  `[Unsupported content (type N)]`, and a "no messages for X days (from -> to)" line marks silences
+  longer than the new `render.quiet_gap_days` setting (default 3, `0` disables).
+
 ### Added
 - M1 skeleton: marketplace manifest, `line-cli` and `media-digest` plugin manifests,
   placeholder skills, package stubs, manifest tests and CI.

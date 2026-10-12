@@ -83,6 +83,7 @@ Everything works without configuration. Two optional `config.toml` files exist (
 | `line_path` | Use a specific `line` program (for example a fork or pinned build) |
 | `archive_root` | Where the archive is kept (the environment variable `LINE_SKILL_ARCHIVE` also sets it and wins). Default: `%LOCALAPPDATA%\line-skill\archive` (Windows), `~/Library/Application Support/line-skill/archive` (macOS), `~/.local/share/line-skill/archive` (Linux) |
 | `download.types`, `download.max_bytes` | Which attachment types are downloaded automatically (`image`, `video`, `audio`, `file`) and the size limit in bytes (default 20 MiB, the most this client can fetch) |
+| `render.quiet_gap_days` | In `messages.md`, add a "no messages for X days" line between two messages further apart than this many days (default 3; `0` turns it off) |
 
 **`media-digest`** (`%APPDATA%\media-digest\config.toml` on Windows, otherwise `~/.config/media-digest/config.toml`; override with `MEDIA_DIGEST_CONFIG`):
 

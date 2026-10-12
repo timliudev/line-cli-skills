@@ -83,6 +83,7 @@ Claude 會替你從 plugin 的 `skills/media-digest/scripts` 資料夾執行 `di
 | `line_path` | 指定要使用的 `line` 程式（例如分支版本或固定版本的建置） |
 | `archive_root` | 存檔的位置（也可用環境變數 `LINE_SKILL_ARCHIVE` 設定，且優先採用）。預設：`%LOCALAPPDATA%\line-skill\archive`（Windows）、`~/Library/Application Support/line-skill/archive`（macOS）、`~/.local/share/line-skill/archive`（Linux） |
 | `download.types`, `download.max_bytes` | 自動下載哪些附件類型（`image`、`video`、`audio`、`file`），以及大小上限（單位為位元組，預設 20 MiB，也是此用戶端能抓取的上限） |
+| `render.quiet_gap_days` | `messages.md` 中，相鄰兩則訊息相隔超過這個天數時，插入一行「no messages for X days」（預設 3；`0` 關閉） |
 
 **`media-digest`**（Windows 為 `%APPDATA%\media-digest\config.toml`，其他系統為 `~/.config/media-digest/config.toml`；可用 `MEDIA_DIGEST_CONFIG` 覆寫）：
 

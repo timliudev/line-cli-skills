@@ -46,7 +46,8 @@ def test_all_continues_after_a_chat_fails(fake_line, archive_root, capsys):
     assert [c["chat_id"] for c in out["chats"]] == [CHAT, OTHER]
     assert [f["chat_id"] for f in out["failed"]] == [BROKEN]
     assert out["failed"][0]["error"]["kind"] == "network"
-    assert {p.name.split("__")[0] for p in archive_root.iterdir() if p.is_dir()} == {CHAT, OTHER}
+    ids = {p.name.rsplit("__", 1)[-1] for p in archive_root.iterdir() if p.is_dir()}
+    assert ids == {CHAT, OTHER}
 
     # chats were processed one after another, in listing order
     asked = [a[1] for a in fake_line.argv_calls() if a[:1] == ["messages"]]
@@ -81,7 +82,7 @@ def test_warns_when_archive_is_inside_a_git_repo(fake_line, isolated_env, monkey
     code, out = run_sync(capsys, CHAT, "--name", "G")
     assert code == 0
     assert any("git repository" in w and "never commit" in w for w in out["warnings"])
-    assert (root / f"{CHAT}__G" / "messages.md").is_file()  # still works, just warns
+    assert (root / f"G__{CHAT}" / "messages.md").is_file()  # still works, just warns
 
 
 def test_no_git_warning_outside_a_repo(fake_line, archive_root, capsys):
@@ -138,19 +139,35 @@ def test_safe_name_limits_length_and_keeps_windows_happy():
     assert store.safe_name("y" * (store.NAME_LIMIT - 1) + ". ") == "y" * (store.NAME_LIMIT - 1)
 
 
-def test_folder_name_is_keyed_by_chat_id():
-    assert store.folder_name(GID, "Family") == f"{GID}__Family"
+def test_folder_name_is_name_first_and_keeps_the_id_intact():
+    assert store.folder_name(GID, "Family") == f"Family__{GID}"
     assert store.folder_name(GID, None) == GID
     assert store.folder_name(GID, "???") == GID
+    long = store.folder_name(GID, "n" * 200)
+    assert long == "n" * store.NAME_LIMIT + f"__{GID}"
+    assert store.folder_name(GID, "a:b/c?") == f"a_b_c___{GID}"
+    assert store.folder_name(GID, "CON") == f"_CON__{GID}"
+    assert store.folder_name(GID, "name. ") == f"name__{GID}"
 
 
-def test_find_chat_dir_matches_the_id_prefix_only(tmp_path):
-    (tmp_path / f"{GID}__Old Name").mkdir()
+def test_find_chat_dir_matches_new_old_and_bare_layouts(tmp_path):
+    other = "C" + "Z" * 43
     (tmp_path / f"{GID}X__other").mkdir()
+    (tmp_path / f"Other__{GID}X").mkdir()
     (tmp_path / "contacts.json").write_text("{}", encoding="utf-8")
-    found = store.find_chat_dir(tmp_path, GID)
-    assert found is not None and found.name == f"{GID}__Old Name"
-    assert store.find_chat_dir(tmp_path, "C" + "Z" * 43) is None
+    assert store.find_chat_dir(tmp_path, GID) is None
+    for name in (f"{GID}__Old Name", f"New Name__{GID}", GID):
+        (tmp_path / name).mkdir()
+        found = store.find_chat_dir(tmp_path, GID)
+        assert found is not None and found.name == name
+        (tmp_path / name).rmdir()
+    assert store.find_chat_dir(tmp_path, other) is None
+
+
+def test_folder_label_reads_new_old_and_bare(tmp_path):
+    assert store.folder_label(tmp_path / f"New__{GID}", GID) == "New"
+    assert store.folder_label(tmp_path / f"{GID}__Old", GID) == "Old"
+    assert store.folder_label(tmp_path / GID, GID) is None
 
 
 @pytest.mark.parametrize(

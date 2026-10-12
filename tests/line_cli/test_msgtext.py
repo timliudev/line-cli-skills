@@ -56,10 +56,21 @@ def test_sync_names_group_sender_from_text_when_contacts_lookup_fails(
     cache = (archive_root / "contacts.json").read_text(encoding="utf-8")
     assert GROUP_MEMBER in cache and "Ina" in cache
     # the text listing is fetched once per sync, not once per message
-    assert len([a for a in fake_line.argv_calls() if a[-1:] == ["--show-ids"]]) == 1
+    assert (
+        len(
+            [
+                a
+                for a in fake_line.argv_calls()
+                if a[:1] == ["messages"] and a[-1:] == ["--show-ids"]
+            ]
+        )
+        == 1
+    )
 
 
 def test_sync_skips_text_lookup_when_contacts_resolve_everyone(fake_line, archive_root, capsys):
     fake_line.scenario(base_rules(messages_rule([msg(1, 0, "hi", ALICE)])))
     run_sync(capsys, "--no-download", GID)
-    assert not [a for a in fake_line.argv_calls() if a[-1:] == ["--show-ids"]]
+    assert not [
+        a for a in fake_line.argv_calls() if a[:1] == ["messages"] and a[-1:] == ["--show-ids"]
+    ]

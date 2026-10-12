@@ -46,7 +46,7 @@ def test_first_sync_creates_archive(fake_line, archive_root, capsys):
     assert out["warnings"] == []
 
     folder = archive_dir(archive_root)
-    assert folder.name == f"{CHAT}__Family"
+    assert folder.name == f"Family__{CHAT}"
     assert out["archive_dir"] == str(folder)
     assert [r["id"] for r in read_jsonl(folder / "messages.jsonl")] == ["1", "2", "3"]
 
@@ -134,7 +134,7 @@ def test_name_is_resolved_and_archive_folder_renamed(fake_line, archive_root, ca
     code, out = run_sync(capsys, "Family")
     assert code == 0 and out["chat"] == "Family"
     folder = archive_dir(archive_root)
-    assert folder.name == f"{CHAT}__Family"
+    assert folder.name == f"Family__{CHAT}"
 
     # the group is renamed: same archive (keyed by ID), only the folder suffix changes
     (folder / "files").mkdir()
@@ -142,7 +142,7 @@ def test_name_is_resolved_and_archive_folder_renamed(fake_line, archive_root, ca
     code, out = run_sync(capsys, CHAT, "--name", "Family: 2027/trip?")
     assert code == 0
     renamed = archive_dir(archive_root)
-    assert renamed.name == f"{CHAT}__Family_ 2027_trip_"
+    assert renamed.name == f"Family_ 2027_trip___{CHAT}"
     assert (renamed / "files" / "keep.txt").is_file()
     assert [p.name for p in archive_root.iterdir() if p.is_dir()] == [renamed.name]
     assert read_jsonl(renamed / "messages.jsonl")[0]["id"] == "1"
@@ -177,7 +177,7 @@ def test_direct_chat_is_named_after_the_contact(fake_line, archive_root, capsys)
     )
     code, out = run_sync(capsys, direct)
     assert code == 0 and out["chat"] == "Carol"
-    assert archive_dir(archive_root, direct).name == f"{direct}__Carol"
+    assert archive_dir(archive_root, direct).name == f"Carol__{direct}"
 
 
 def test_ambiguous_name_creates_nothing(fake_line, archive_root, capsys):
@@ -311,3 +311,24 @@ def test_render_marks_unsent_gap_and_attachments():
     assert "[Video] over 20 MiB, not downloaded" in md
     gap_at = md.index("Possible gap")
     assert md.index("[Video]") < gap_at < md.index("after the gap")
+
+
+def test_render_neutral_labels_for_system_event_and_unsupported_types():
+    records = [
+        msg(1, 0, "", ALICE, content_type=18, status="unsupported"),
+        msg(2, 1, "", ALICE, content_type=99, status="unsupported"),
+    ]
+    md = render_for(records)
+    assert "[System event (type 18)]" in md
+    assert "[Unsupported content (type 99)]" in md
+
+
+def test_render_quiet_gap_line_between_distant_messages():
+    day = 24 * 60
+    records = [msg(1, 0, "a", ALICE), msg(2, 5 * day, "b", BOB), msg(3, 6 * day, "c", BOB)]
+    md = render_for(records)
+    assert md.count("no messages for") == 1
+    assert "— no messages for 5 days (2025-10-09 → 2025-10-14) —" in md
+    assert md.index("no messages for") < md.index("## 2025-10-14")
+    assert "no messages for" not in render_for(records, quiet_gap_days=0)
+    assert "no messages for" not in render_for(records, quiet_gap_days=5)  # not more than 5

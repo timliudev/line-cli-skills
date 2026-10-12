@@ -72,6 +72,7 @@ class Syncer:
     _cache: dict[str, dict[str, Any]] | None = None
     _self_mid: str | None = None
     _self_checked: bool = False
+    _active_names: dict[str, str] | None = None
     _notes: list[str] = field(default_factory=list)
 
     # ------------------------------------------------------------ helpers
@@ -89,6 +90,16 @@ class Syncer:
             if isinstance(data, dict) and isinstance(data.get("mid"), str):
                 self._self_mid = data["mid"]
         return self._self_mid
+
+    def active_name(self, chat_id: str) -> str | None:
+        """Name of an active chat from the text listing (one call per run, best effort)."""
+        if self._active_names is None:
+            try:
+                rows, _ = chatlist.fetch_active_chats(config=self.config, binary=self.binary)
+                self._active_names = chatlist.named_only(rows)
+            except Exception:  # noqa: BLE001 - a failed lookup must never fail the sync
+                self._active_names = {}
+        return self._active_names.get(chat_id)
 
     def fetch(self, chat_id: str) -> tuple[list[dict[str, Any]], list[str]]:
         result = runner.run_line(
@@ -198,12 +209,14 @@ class Syncer:
                 warnings = [w for w in warnings if w not in name_warnings]
         name_by_mid = names.name_map(self._cache)
         fresh_name = name_hint or (name_by_mid.get(chat_id) if chat_id[:1].lower() == "u" else None)
+        if not fresh_name and not state.get("name"):  # name unknown: look it up, else id-only
+            fresh_name = self.active_name(chat_id)
         chat_name = fresh_name or state.get("name")
         if not chat_name and chat_dir is not None:
             chat_name = store.folder_label(chat_dir, chat_id)
 
         # --- folder (keyed by ID; only the name part of the folder changes on a rename)
-        wanted = store.folder_name(chat_id, fresh_name) if fresh_name else None
+        wanted = store.folder_name(chat_id, chat_name) if chat_name else None
         try:
             root.mkdir(parents=True, exist_ok=True)
             if chat_dir is None:
@@ -211,7 +224,7 @@ class Syncer:
                 chat_dir.mkdir(parents=True, exist_ok=True)
             elif wanted and chat_dir.name != wanted:
                 target = chat_dir.with_name(wanted)
-                if target.exists():
+                if target.exists() and not target.samefile(chat_dir):
                     warnings.append(f"could not rename {chat_dir.name} to {wanted}: target exists")
                 else:
                     try:
@@ -334,6 +347,7 @@ class Syncer:
             ],
             synced_at=now,
             tz=opts.tz,
+            quiet_gap_days=cfg.render_quiet_gap_days,
         )
         store.atomic_write_text(chat_dir / store.MD_NAME, rendered.text)
         store.write_json(chat_dir / store.STATE_NAME, state)
@@ -533,6 +547,7 @@ def main(argv: list[str] | None = None) -> int:
     # Active-chat names from the text listing (the JSON listing has IDs only). Best effort.
     listed, text_listing = chatlist.fetch_active_chats(config=config, binary=syncer.binary)
     listed_names = chatlist.named_only(listed)
+    syncer._active_names = listed_names
     done: list[dict[str, Any]] = []
     failed: list[dict[str, Any]] = []
     for chat_id in chat_ids:
