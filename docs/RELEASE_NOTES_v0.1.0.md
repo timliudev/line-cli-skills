@@ -35,7 +35,9 @@ optional and independent of `line-cli`. Documentation (English, zh-TW, ja, th): 
 - Local archive (`sync.py`): the latest 100 messages of a chat are merged into `messages.jsonl`
   (record) and `messages.md` (for reading) in a folder named `<name>__<chat_id>`, and new attachments
   are downloaded immediately because LINE expires them. Reports possible gaps and possibly unsent
-  messages, and warns if the archive is inside a git repository.
+  messages, and warns if the archive is inside a git repository. Group sender names, reactions
+  (built-in emoji or a LINE emoji link, with who and when) and long quiet periods are shown in
+  `messages.md`; folders left over from older layouts merge automatically.
 - Write actions are confirmed every time, attempted once, and never retried automatically. After a
   lost response Claude checks the chat first.
 - Message text is treated as data, never as instructions.
