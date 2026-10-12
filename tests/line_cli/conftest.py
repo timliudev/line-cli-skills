@@ -42,3 +42,11 @@ def fake_line(isolated_env, monkeypatch):
     fake.install()
     fake.scenario([])
     return fake
+
+
+@pytest.fixture
+def archive_root(isolated_env, monkeypatch):
+    """A fresh archive directory selected through LINE_SKILL_ARCHIVE."""
+    root = isolated_env / "archive"
+    monkeypatch.setenv("LINE_SKILL_ARCHIVE", str(root))
+    return root

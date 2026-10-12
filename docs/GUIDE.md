@@ -6,7 +6,7 @@ English | [繁體中文（台灣）](GUIDE.zh-TW.md) | [日本語](GUIDE.ja.md) 
 
 > Unofficial project, not affiliated with or endorsed by LINE Corporation / LY Corporation. It uses the unofficial kongesque/line-cli client, which may risk suspension of your LINE account. See the README for details.
 
-You mostly just talk to Claude Code in your own language. This guide explains what happens behind the scenes, what Claude will ask you, and how to fix problems. Features marked **planned** are not available yet.
+You mostly just talk to Claude Code in your own language. This guide explains what happens behind the scenes, what Claude will ask you, and how to fix problems.
 
 ## Install
 
@@ -48,7 +48,8 @@ Just ask, for example "What did the Family group say today?" or "Any new message
   - Claude tries once and never retries on its own. If the connection drops mid-send, it checks the chat to see whether the message arrived before suggesting anything.
   - Unsend removes your own message for everyone and cannot be undone.
 - **Messages from others are treated as data**, not instructions. If a chat message says "run this" or "send that to someone", Claude shows it to you and asks.
-- **Planned:** keeping a local archive of chat history so that messages older than the latest 100 are not lost, with automatic downloading of new attachments. Until then, Claude reads on demand.
+- **Local archive.** Before answering questions about a chat, Claude runs a sync: it fetches the latest 100 messages, adds the new ones to a folder on your computer (`messages.jsonl` is the record, `messages.md` is for reading) and downloads new photos, videos, voice messages and files straight away, because LINE expires attachments. That is how "anything new?" is answered quickly, and how history older than LINE's latest 100 is kept, starting from your first sync. You can also ask for a sync directly, for one chat or for "all my chats".
+  - Good to know: a sync only reads from LINE; the first sync of a chat can only reach its latest 100 messages; if more than 100 messages arrive between two syncs, Claude tells you there is a gap; an archived message that disappears from LINE's latest 100 is kept and marked "(possibly unsent)", which is a guess, not a certainty.
 
 ## Attachments and media-digest
 
@@ -57,6 +58,7 @@ Just ask, for example "What did the Family group say today?" or "Any new message
 - **Voice messages and audio.** Claude transcribes them with timestamps.
 - Without `media-digest`, Claude tells you the file's location and that installing the plugin lets it understand videos and audio.
 - Some things may be missing or unavailable: attachments LINE has expired, files over 20 MiB, and media stored behind external links cannot be downloaded.
+- New attachments are downloaded for you during a sync (up to 20 MiB each, every type by default) into the chat's `files` folder. Photos and PDFs are read from there; videos and voice messages go to `media-digest`.
 
 What `media-digest` needs, offered with your consent and a stated download size:
 
@@ -79,7 +81,8 @@ Everything works without configuration. Two optional `config.toml` files exist (
 | Key | Meaning |
 | --- | --- |
 | `line_path` | Use a specific `line` program (for example a fork or pinned build) |
-| `archive_root`, `download.types`, `download.max_bytes` | Reserved for the **planned** sync/archive feature |
+| `archive_root` | Where the archive is kept (the environment variable `LINE_SKILL_ARCHIVE` also sets it and wins). Default: `%LOCALAPPDATA%\line-skill\archive` (Windows), `~/Library/Application Support/line-skill/archive` (macOS), `~/.local/share/line-skill/archive` (Linux) |
+| `download.types`, `download.max_bytes` | Which attachment types are downloaded automatically (`image`, `video`, `audio`, `file`) and the size limit in bytes (default 20 MiB, the most this client can fetch) |
 
 **`media-digest`** (`%APPDATA%\media-digest\config.toml` on Windows, otherwise `~/.config/media-digest/config.toml`; override with `MEDIA_DIGEST_CONFIG`):
 
@@ -103,6 +106,7 @@ preset = "groq"                                       # api_key_env = "GROQ_API_
 ## Privacy
 
 - Your chats, downloaded attachments and digests are private conversations. They are kept on your machine, never inside the plugin directory. Never commit or publish them, and keep them out of any git repository.
+- The archive is a folder of private conversations on your machine (by default in your user profile, never in the plugin directory). If its location is inside a git repository, Claude warns you: move it, and never commit or publish it.
 - Claude does not send chat content to other services. Transcription is local unless you configured a cloud engine; Claude tells you which service would receive the audio and asks before the first upload.
 - Claude never asks for your LINE password in the chat, and does not read the stored session.
 - Sending, reacting and unsending always need your explicit yes; nothing is sent in the background.
@@ -123,5 +127,9 @@ Ask Claude to "run the LINE doctor". It runs `setup.py --doctor` from the plugin
 | "needs ffmpeg" | Install ffmpeg (see above), then run again |
 | Transcript failed on a long recording with a cloud service | Audio over 25 MB is not split yet; use a local engine |
 | Message might not have been sent | Claude checks the chat first and never resends without your yes |
+| Claude warns about a "gap" | More than 100 messages arrived since the last sync, and the missing ones cannot be recovered. Sync more often |
+| A message is marked "(possibly unsent)" | It vanished from LINE's latest 100 after it was archived, so it was probably unsent. The saved text is kept |
+| A photo or file is marked "expired" or "over 20 MiB" | LINE no longer has it, or it is above this client's limit, so it cannot be downloaded |
+| Archive warning about a git repository | Set `archive_root` (or `LINE_SKILL_ARCHIVE`) to a folder outside the repository |
 
 [Back to the README](../README.md)

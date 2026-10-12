@@ -2,7 +2,7 @@
 
 English | [繁體中文（台灣）](README.zh-TW.md) | [日本語](README.ja.md) | [ภาษาไทย](README.th.md)
 
-Claude Code skills for working with a **personal LINE account** and the media people send you. Status: **early development (v0.0.x)** - reading, sending and media digestion work; local sync/archive is planned.
+Claude Code skills for working with a **personal LINE account** and the media people send you. Status: **early development (v0.0.x)** - reading, sending, local sync/archive and media digestion work.
 
 <a id="disclaimer"></a>
 
@@ -20,6 +20,7 @@ Two independent Claude Code plugins:
   - Guided first-time setup in plain language: installs `line` for you after you agree (pinned release, checksum-verified, no admin rights), then walks you through login.
   - Safe by design: Claude shows the chat, the exact text and the action and waits for your "yes". Writes are never retried automatically.
   - Chat names are resolved to IDs; ambiguous names are put to you, never guessed.
+  - Local archive: `sync.py` saves each chat's messages (a `.jsonl` record plus a readable `.md`) in a folder on your machine and downloads new attachments right away, so Claude can tell you what is new and your history is kept from the day you start syncing, not just LINE's latest 100 messages.
 - **media-digest** - turn videos and audio into keyframes plus a timestamped transcript Claude can read. Works with any local file, not only LINE.
   - Videos: keyframes by scene detection (with timestamps) and a transcript, merged into one `digest.md` timeline.
   - Audio and voice messages: transcript with timestamps.
@@ -52,7 +53,7 @@ See the [user guide](docs/GUIDE.md) for details, configuration and troubleshooti
 
 ## Status
 
-Early development. Implemented: guided install and login, reading and searching chats, downloading attachments, confirmed send/react/unsend, media digestion and speech-to-text backends. Planned: local sync and archive of chat history (`sync.py`) so history older than LINE's latest 100 messages per chat is kept. See the [user guide](docs/GUIDE.md) and the [changelog](CHANGELOG.md).
+Early development. Implemented: guided install and login, reading and searching chats, local sync and archive of chat history (`sync.py`) with automatic attachment downloads, confirmed send/react/unsend, media digestion and speech-to-text backends. See the [user guide](docs/GUIDE.md) and the [changelog](CHANGELOG.md).
 
 ## Credits
 

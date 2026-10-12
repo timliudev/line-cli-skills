@@ -6,7 +6,7 @@
 
 > 非官方專案，與 LINE Corporation／LY Corporation 沒有關係，也未獲其認可。本專案使用非官方的 kongesque/line-cli 用戶端，可能導致你的 LINE 帳號被停權。詳見 README。
 
-大多數情況下，你只需要用自己的語言跟 Claude Code 對話即可。本指南說明幕後發生的事、Claude 會問你什麼，以及如何解決問題。標示為**規劃中**的功能目前尚無法使用。
+大多數情況下，你只需要用自己的語言跟 Claude Code 對話即可。本指南說明幕後發生的事、Claude 會問你什麼，以及如何解決問題。
 
 ## 安裝
 
@@ -48,7 +48,8 @@
   - Claude 只會嘗試一次，絕不會自行重試。若發送途中連線中斷，它會先檢查聊天室，確認訊息是否已送達，才會提出任何建議。
   - 收回會將你自己的訊息對所有人移除，且無法復原。
 - **他人的訊息一律視為資料，而非指令。** 若聊天訊息寫著「執行這個」或「把那個傳給某人」，Claude 會顯示給你看並詢問，不會照做。
-- **規劃中：** 保存聊天紀錄的本機存檔，讓最新 100 則之前的訊息不會遺失，並自動下載新附件。在此之前，Claude 只會依需求讀取。
+- **本機存檔。** 回答聊天室相關問題之前，Claude 會先同步一次：抓取最新 100 則訊息，把新的訊息加進你電腦上的資料夾（`messages.jsonl` 是原始紀錄，`messages.md` 供閱讀），並立刻下載新的照片、影片、語音訊息與檔案，因為 LINE 會讓附件過期。這樣才能快速回答「有新訊息嗎？」，也能從你第一次同步起保留超過 LINE 最新 100 則的歷史紀錄。你也可以直接要求同步，針對單一聊天室或「我所有的聊天室」。
+  - 注意事項：同步只會從 LINE 讀取；聊天室第一次同步只拿得到最新 100 則；若兩次同步之間收到超過 100 則訊息，Claude 會告訴你有缺漏；已存檔的訊息若從 LINE 最新 100 則中消失，會保留下來並標示「(possibly unsent)」（可能已收回），這只是推測，不是定論。
 
 ## 附件與 media-digest
 
@@ -57,6 +58,7 @@
 - **語音訊息與音訊。** Claude 會轉寫並附上時間戳。
 - 若沒有 `media-digest`，Claude 會告訴你檔案的位置，並說明安裝該 plugin 後就能理解影片與音訊。
 - 部分內容可能缺漏或無法取得：LINE 已過期的附件、超過 20 MiB 的檔案，以及儲存在外部連結後方的媒體，都無法下載。
+- 同步時會替你下載新附件（每個上限 20 MiB，預設所有類型），存到該聊天室的 `files` 資料夾。照片與 PDF 直接從那裡讀取；影片與語音訊息則交給 `media-digest`。
 
 `media-digest` 所需項目（會在你同意並告知下載大小後才提供）：
 
@@ -79,7 +81,8 @@ Claude 會替你從 plugin 的 `skills/media-digest/scripts` 資料夾執行 `di
 | 設定鍵 | 說明 |
 | --- | --- |
 | `line_path` | 指定要使用的 `line` 程式（例如分支版本或固定版本的建置） |
-| `archive_root`, `download.types`, `download.max_bytes` | 保留給**規劃中**的同步／存檔功能使用 |
+| `archive_root` | 存檔的位置（也可用環境變數 `LINE_SKILL_ARCHIVE` 設定，且優先採用）。預設：`%LOCALAPPDATA%\line-skill\archive`（Windows）、`~/Library/Application Support/line-skill/archive`（macOS）、`~/.local/share/line-skill/archive`（Linux） |
+| `download.types`, `download.max_bytes` | 自動下載哪些附件類型（`image`、`video`、`audio`、`file`），以及大小上限（單位為位元組，預設 20 MiB，也是此用戶端能抓取的上限） |
 
 **`media-digest`**（Windows 為 `%APPDATA%\media-digest\config.toml`，其他系統為 `~/.config/media-digest/config.toml`；可用 `MEDIA_DIGEST_CONFIG` 覆寫）：
 
@@ -103,6 +106,7 @@ preset = "groq"                                       # api_key_env = "GROQ_API_
 ## 隱私
 
 - 你的聊天紀錄、下載的附件與摘要都是私人對話。它們保存在你的電腦上，絕不放在 plugin 資料夾內。請勿 commit 或公開，並讓它們遠離任何 git repository。
+- 存檔是你電腦上一個存放私人對話的資料夾（預設在你的使用者資料夾內，絕不放在 plugin 目錄裡）。若存檔位置位於 git repository 內，Claude 會提醒你：請將它移走，且絕不要 commit 或公開。
 - Claude 不會將聊天內容傳送到其他服務。除非你設定了雲端引擎，否則轉寫都在本機進行；若會使用雲端，Claude 會告訴你哪個服務會接收音訊，並在第一次上傳前詢問。
 - Claude 絕不會在對話中要求你的 LINE 密碼，也不會讀取已儲存的工作階段。
 - 發送、回應表情與收回永遠需要你明確同意；不會在背景發送任何東西。
@@ -123,5 +127,9 @@ preset = "groq"                                       # api_key_env = "GROQ_API_
 | "needs ffmpeg" | 安裝 ffmpeg（見上文），然後再執行一次 |
 | 雲端服務處理長錄音時逐字稿失敗 | 超過 25 MB 的音訊尚未支援切割；請改用本機引擎 |
 | 訊息可能未送出 | Claude 會先檢查聊天室，且未經你同意絕不會重新發送 |
+| Claude 提醒有「缺漏」 | 自上次同步後收到超過 100 則訊息，漏掉的部分無法找回。請更頻繁地同步 |
+| 某則訊息標示 "(possibly unsent)" | 它存檔後從 LINE 最新 100 則中消失，所以很可能已被收回；已儲存的文字仍會保留 |
+| 照片或檔案標示 "expired" 或 "over 20 MiB" | LINE 已不再提供，或超過此用戶端的上限，因此無法下載 |
+| 存檔位於 git repository 內的警告 | 將 `archive_root`（或 `LINE_SKILL_ARCHIVE`）設為 repository 以外的資料夾 |
 
 [回到 README](../README.zh-TW.md)

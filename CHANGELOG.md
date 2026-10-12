@@ -9,6 +9,9 @@ All notable changes to this project are documented here. Format based on
 - M1 skeleton: marketplace manifest, `line-cli` and `media-digest` plugin manifests,
   placeholder skills, package stubs, manifest tests and CI.
 - Multilingual documentation (English, zh-TW, ja, th): README and user guide stubs.
+- Plugin evals (M4) in the official layout `plugins/<plugin>/evals/`: skill triggering, no trigger
+  for LINE OA questions, confirm-before-send/unsend, no retry after a timeout, login warning.
+  How to run and cost guidance: `docs/EVALS.md`.
 - `line-cli` plugin:
   - `setup.py` (`--check`, `--install`, `--doctor`): detects `line`, plans and runs a pinned,
     checksum-verified install per OS after user consent, never runs `sudo`, diagnoses problems in
@@ -22,6 +25,15 @@ All notable changes to this project are documented here. Format based on
     reserved archive keys.
   - `SKILL.md` workflow (first run, reading, attachments, confirmed writes) and `references/`
     (commands, JSON schema, errors, safety, setup) matching line-cli v0.4.0.
+  - Sync and local archive (M3): `sync.py CHAT|--all` fetches the latest 100 messages, de-duplicates
+    by message ID into `messages.jsonl`, regenerates a readable `messages.md` (sender names via
+    cached `contacts --mid` lookups, relative attachment links) and keeps `state.json`. New
+    attachments are downloaded right away (`download.types`, `download.max_bytes`, `--types`,
+    `--max-bytes`, `--no-download`) with extensions corrected from magic bytes; expired, external
+    and too-large ones are marked, not retried forever. Detects possible gaps and possibly unsent
+    messages (kept, marked), follows chat renames, warns when the archive is inside a git
+    repository. Archive location: `LINE_SKILL_ARCHIVE`, `archive_root` or a per-OS default.
+    `SKILL.md` now syncs first and reads `messages.md`; new `references/archive.md`.
 - `media-digest` plugin:
   - Core: `digest.py` turns video into scene-based keyframes with timestamps and audio into a
     transcript, merged into `digest.md` and `digest.json`; images and PDFs pass through; results

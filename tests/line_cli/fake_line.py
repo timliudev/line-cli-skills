@@ -4,9 +4,12 @@ Env:
   FAKE_LINE_SCENARIO  path to the scenario JSON
 Scenario: {"rules": [{"args": [...] | "prefix": [...], "responses": [
               {"exit": 0, "stdout": <str|json>, "stderr": "", "sleep": 0}]}]}
+A response may carry `"write": {"b64": "<base64>", "pad": N}` to create the `--output` file
+(exclusively, like the real CLI) with those bytes followed by N zero bytes.
 The last response of a rule repeats. Every call is appended to `<scenario>.log`.
 """
 
+import base64
 import json
 import os
 import sys
@@ -43,6 +46,17 @@ def main() -> int:
         break
     with open(state_path, "w", encoding="utf-8") as handle:
         json.dump(state, handle)
+
+    spec = response.get("write")
+    if spec and "--output" in args:
+        target = args[args.index("--output") + 1]
+        payload = base64.b64decode(spec.get("b64", "")) + b"\0" * int(spec.get("pad", 0))
+        try:
+            with open(target, "xb") as handle:
+                handle.write(payload)
+        except FileExistsError:
+            sys.stderr.write("line: output path already exists\n")
+            return 1
 
     if response.get("sleep"):
         time.sleep(response["sleep"])
