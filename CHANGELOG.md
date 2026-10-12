@@ -76,6 +76,7 @@ First release. This is early software: the list below says exactly what has been
   option. Two or more matches still return `candidates`.
 
 ### Fixed
+- Tests: Windows installer PATH helper uses Windows path rules on every OS, and `setup --check` tests no longer depend on the CI host's keyring (Linux/macOS CI).
 - `sync.py <CHAT_ID>` without `--name` no longer leaves the archive folder and the `messages.md`
   title as the bare ID: the name is looked up (contacts for direct chats, one cached
   `chats --limit 0 --show-ids` call for groups and rooms) and an id-only folder is renamed. If the

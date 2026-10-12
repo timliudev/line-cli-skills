@@ -1,5 +1,6 @@
 import hashlib
 import json
+import ntpath
 import os
 import subprocess
 import sys
@@ -54,7 +55,15 @@ def test_check_logged_in(fake_line, capsys):
     assert "mid" not in json.dumps(out)  # no account identifiers leak
 
 
-def test_check_logged_out(fake_line, capsys):
+@pytest.fixture
+def no_keyring_check(monkeypatch):
+    """Keep --check tests independent of the host's real Secret Service keyring."""
+    monkeypatch.setattr(
+        setup, "keyring_status", lambda os_name, binary: {"status": "not_applicable"}
+    )
+
+
+def test_check_logged_out(fake_line, capsys, no_keyring_check):
     fake_line.scenario(
         [
             rule(["version"], stdout="line v0.4.0"),
@@ -65,7 +74,7 @@ def test_check_logged_out(fake_line, capsys):
     assert out["logged_in"] is False and out["next_step"] == "login"
 
 
-def test_check_unknown_login_state_when_busy(fake_line, capsys, monkeypatch):
+def test_check_unknown_login_state_when_busy(fake_line, capsys, monkeypatch, no_keyring_check):
     monkeypatch.setattr(runner, "_sleep", lambda s: None)
     fake_line.scenario(
         [rule(["version"], stdout="line v0.4.0"), rule(["whoami", "--json"], responses=[BUSY])]
@@ -274,7 +283,7 @@ def test_install_windows_runs_pinned_script(fake_line, capsys, monkeypatch):
     assert content == script
     # Git Bash's GNU tar must not shadow Windows' bsdtar: System32 leads PATH for the installer
     path_key = next(k for k in env if k.upper() == "PATH")
-    assert env[path_key].split(os.pathsep)[0].lower().endswith("system32")
+    assert env[path_key].split(";")[0].lower().endswith("system32")
     assert not any("sudo" in part for part in cmd)
     assert out["status"] == "installed" and out["line"]["version"] == "v0.4.0"
     assert out["line"]["source"] == "known"  # not on PATH in this session, still usable
@@ -283,39 +292,39 @@ def test_install_windows_runs_pinned_script(fake_line, capsys, monkeypatch):
 
 
 def _sys32(root):
-    return os.path.join(root, "System32")
+    return ntpath.join(root, "System32")
 
 
 def test_windows_installer_env_puts_system32_first():
     root = r"C:\Windows"
     env = setup._windows_installer_env(
-        {"SystemRoot": root, "PATH": os.pathsep.join(["gitbin", "other"]), "KEEP": "1"}
+        {"SystemRoot": root, "PATH": ";".join(["gitbin", "other"]), "KEEP": "1"}
     )
-    assert env["PATH"].split(os.pathsep) == [_sys32(root), "gitbin", "other"]
+    assert env["PATH"].split(";") == [_sys32(root), "gitbin", "other"]
     assert env["KEEP"] == "1"
 
 
 def test_windows_installer_env_path_key_is_case_insensitive():
     root = r"D:\Win"
-    original = {"SystemRoot": root, "Path": os.pathsep.join(["a", "b"])}
+    original = {"SystemRoot": root, "Path": ";".join(["a", "b"])}
     env = setup._windows_installer_env(original)
     assert "PATH" not in env  # reuses the existing key spelling, no duplicate variable
-    assert env["Path"].split(os.pathsep) == [_sys32(root), "a", "b"]
-    assert original["Path"] == os.pathsep.join(["a", "b"])  # input not mutated
+    assert env["Path"].split(";") == [_sys32(root), "a", "b"]
+    assert original["Path"] == ";".join(["a", "b"])  # input not mutated
 
 
 def test_windows_installer_env_dedupes_system32_and_empty_entries():
     root = r"C:\Windows"
-    path = os.pathsep.join(["x", _sys32(root), "", "y", _sys32(root)])
+    path = ";".join(["x", _sys32(root), "", "y", _sys32(root)])
     env = setup._windows_installer_env({"SystemRoot": root, "PATH": path})
-    assert env["PATH"].split(os.pathsep) == [_sys32(root), "x", "y"]
+    assert env["PATH"].split(";") == [_sys32(root), "x", "y"]
 
 
 def test_windows_installer_env_without_systemroot_uses_default_and_sets_path():
     env = setup._windows_installer_env({})
     assert env["PATH"] == _sys32(r"C:\Windows")
     upper = setup._windows_installer_env({"SYSTEMROOT": r"E:\W", "PATH": "p"})
-    assert upper["PATH"].split(os.pathsep) == [_sys32(r"E:\W"), "p"]
+    assert upper["PATH"].split(";") == [_sys32(r"E:\W"), "p"]
 
 
 def test_install_linux_never_sudo_and_reports_keyring(fake_line, capsys, monkeypatch):

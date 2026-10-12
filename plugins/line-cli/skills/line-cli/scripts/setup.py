@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import ntpath
 import os
 import platform
 import re
@@ -81,17 +82,19 @@ def _windows_installer_env(env: dict[str, str]) -> dict[str, str]:
     PATH starts with Git's GNU tar, which reads `C:\\...` as a remote host and
     fails; Windows' bundled bsdtar in System32 handles the archive correctly.
     """
+    # Windows-only semantics on purpose (ntpath, ";") so the logic is the same
+    # whatever OS runs the unit tests.
     env = dict(env)
-    system32 = os.path.join(
+    system32 = ntpath.join(
         env.get("SystemRoot") or env.get("SYSTEMROOT") or r"C:\Windows", "System32"
     )
     key = next((k for k in env if k.upper() == "PATH"), "PATH")
     rest = [
         p
-        for p in env.get(key, "").split(os.pathsep)
-        if p and os.path.normcase(p) != os.path.normcase(system32)
+        for p in env.get(key, "").split(";")
+        if p and ntpath.normcase(p) != ntpath.normcase(system32)
     ]
-    env[key] = os.pathsep.join([system32, *rest])
+    env[key] = ";".join([system32, *rest])
     return env
 
 
