@@ -116,7 +116,7 @@ def test_known_messages_are_refreshed_but_never_downgraded(fake_line, archive_ro
 
     run_sync(capsys, CHAT, "--name", "Family")
     md = (folder / "messages.md").read_text(encoding="utf-8")
-    assert "now readable" in md and "reactions: love (Bob)" in md
+    assert "now readable" in md and "reactions: ❤️ love (Bob, " in md
 
     run_sync(capsys, CHAT, "--name", "Family")  # a later failure must not erase the good copy
     assert read_jsonl(folder / "messages.jsonl")[0]["text"] == "now readable"
@@ -278,7 +278,7 @@ def test_render_replies_stickers_and_reactions():
     md = render_for(records)
     assert '_(in reply to Alice: "lunch?")_' in md
     assert "**Alice**: [Sticker]" in md
-    assert "_(reactions: like (Alice))_" in md
+    assert "_(reactions: 👍 like (Alice, " in md
     assert md.count("\n## ") == 1  # one day section
 
 
@@ -332,3 +332,46 @@ def test_render_quiet_gap_line_between_distant_messages():
     assert md.index("no messages for") < md.index("## 2025-10-14")
     assert "no messages for" not in render_for(records, quiet_gap_days=0)
     assert "no messages for" not in render_for(records, quiet_gap_days=5)  # not more than 5
+
+
+_DEFAULT_AT = at(5)
+
+
+def _reaction_md(rtype, at_millis=_DEFAULT_AT, sender=ALICE):
+    item = {"fromUserMid": sender, "reactionType": rtype}
+    if at_millis is not None:
+        item["atMillis"] = at_millis
+    return render_for([msg(1, 0, "hi", BOB, reactions=[item])])
+
+
+def test_render_predefined_reactions_show_emoji_and_name():
+    names = {2: "👍 like", 3: "❤️ love", 4: "😆 laugh",
+             5: "😮 surprise", 6: "😢 sad", 7: "😡 angry"}
+    for code, label in names.items():
+        md = _reaction_md({"predefinedReactionType": code})
+        assert f"_(reactions: {label} (Alice, {clock(5)}))_" in md
+    assert f"{names[3]} (Alice, {clock(5)})" in _reaction_md({"predefinedReactionType": "3"})
+
+
+def test_render_paid_reaction_links_the_public_sticon_image():
+    paid = {"productId": "abc123", "emojiId": "003", "resourceType": 1, "version": 5}
+    md = _reaction_md({"paidReactionType": paid})
+    url = "https://stickershop.line-scdn.net/sticonshop/v1/sticon/abc123/android/003.png"
+    assert f"[LINE emoji abc123/003]({url}) (Alice, {clock(5)})" in md
+
+
+def test_render_paid_reaction_without_a_safe_image_id_has_no_link():
+    paid = {"productId": "a b/c", "emojiId": "3"}
+    md = _reaction_md({"paidReactionType": paid})
+    assert "LINE emoji a b/c/3 (Alice" in md and "](http" not in md
+
+
+def test_render_unknown_reaction_shapes_and_missing_time():
+    assert "reaction (type unknown) (Alice, " in _reaction_md({"somethingNew": 1})
+    assert "reaction (type unknown) (Alice, " in _reaction_md({"predefinedReactionType": 99})
+    assert "reaction (type unknown) (Alice, " in _reaction_md("weird")
+    assert "(reactions: ❤️ love (Alice))" in _reaction_md(
+        {"predefinedReactionType": 3}, at_millis=None
+    )
+    md = _reaction_md({"predefinedReactionType": 3}, sender=ME)
+    assert "(Me, " in md

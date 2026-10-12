@@ -172,7 +172,8 @@ class Syncer:
         fetched, fetch_warnings = self.fetch(chat_id)
         warnings += fetch_warnings
 
-        chat_dir = store.find_chat_dir(root, chat_id)
+        chat_dir, merge_warnings = store.merge_chat_dirs(root, chat_id)
+        warnings += merge_warnings
         if not fetched and chat_dir is None:
             warnings.append("the chat has no messages to archive yet")
             return summary_for(chat_id, name_hint, None, warnings=warnings)

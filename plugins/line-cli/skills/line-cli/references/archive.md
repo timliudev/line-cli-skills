@@ -60,6 +60,15 @@ sync.py --all [same options]
   (contents untouched). When no name is given and none is stored, a sync looks the name up
   (direct chats via contacts, groups and rooms via `chats --limit 0 --show-ids`, one call per
   run); if that fails the folder stays id-only, silently.
+- If more than one folder matches the same chat ID (for example `<name>__<id>` plus an old
+  `<id>__<name>` left by a concurrent run of older code), the next sync merges them into the
+  canonical one before doing anything else: `messages.jsonl` is unioned by message ID (a decrypted
+  copy beats `decryption_failed`, reactions and `possibly_unsent_at` are unioned, otherwise the
+  copy from the newer sync wins), `state.json` is merged (failed downloads unioned, latest sync
+  time, newest message recomputed), and `files/` entries are moved (same name and identical
+  content keeps one, same name with different content keeps both with a `-1` suffix). The emptied
+  folders are removed; a folder that still holds anything unexpected is left alone and reported
+  as a warning. Idempotent.
 - `messages.jsonl` holds the CLI's items unchanged plus one archive-only field,
   `possibly_unsent_at` (ISO UTC time). Deleting `messages.md` is harmless; the next sync rebuilds it.
 - Reactions and decryption results of messages still inside the latest 100 are refreshed. A
@@ -73,6 +82,11 @@ sync.py --all [same options]
   Between two messages more than `render.quiet_gap_days` days apart (default 3, `0` disables) a line
   `— no messages for X days (YYYY-MM-DD → YYYY-MM-DD) —` is added; it is only a fact about the
   archive and unrelated to the possible-gap marker below.
+  Reactions read `_(reactions: ❤️ love (Alice, 14:05), ...)_`: the built-in six (like, love, laugh,
+  surprise, sad, angry) as emoji plus name; a LINE emoji reaction as
+  `[LINE emoji <productId>/<emojiId>](https://stickershop.line-scdn.net/sticonshop/v1/sticon/<productId>/android/<emojiId>.png)`
+  (link only for a 3-digit `emojiId`; pattern from a community API spec, not official LINE docs);
+  anything else as `reaction (type unknown)`. The time is local, from `atMillis`.
   Markers: `(possibly unsent)` after a message, and a `> ⚠ Possible gap ...` quote between messages.
 - File extensions: content type 1 `.jpg`, 2 `.mp4`, 3 `.m4a`, 14 the sanitized extension of
   `file_name` (`.bin` if none). The first bytes of the file then correct the extension for jpg,

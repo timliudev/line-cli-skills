@@ -155,7 +155,11 @@ Error text examples (free text, may change): `letter sealing keys unavailable; r
 - `reactionType.predefinedReactionType`: 2 like, 3 love, 4 laugh, 5 surprise, 6 sad, 7 angry
   (`pkg/line/reaction.go:106-123`).
 - `reactionType.paidReactionType` (omitempty): object with `productId`, `emojiId`,
-  `resourceType` (omitempty), `version` (omitempty).
+  `resourceType` (omitempty), `version` (omitempty). This is a LINE emoji (sticon) reaction;
+  `version` may arrive as a number or a string, `atMillis` as a number or a numeric string. The
+  archive renders it as `LINE emoji <productId>/<emojiId>`; the public image URL
+  `https://stickershop.line-scdn.net/sticonshop/v1/sticon/<productId>/android/<emojiId>.png`
+  comes from a community API spec, not from line-cli.
 
 ## send
 

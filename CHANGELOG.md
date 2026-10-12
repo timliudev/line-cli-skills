@@ -76,6 +76,16 @@ First release. This is early software: the list below says exactly what has been
   option. Two or more matches still return `candidates`.
 
 ### Fixed
+- Duplicate archive folders for one chat (`<name>__<id>` plus an old `<id>__<name>` or bare `<id>`,
+  e.g. from a concurrent run of older code) no longer make sync keep writing to the old one and warn
+  "could not rename ... target exists": sync now merges them losslessly into the canonical folder
+  (messages unioned by ID with the more complete copy winning, `state.json` merged, `files/` moved
+  with identical files deduplicated and conflicting names kept with a suffix) and removes only
+  folders that end up empty; anything unexpected is left in place with a warning.
+- Reactions in `messages.md` no longer all read `reaction (Me)`: built-in reactions render as emoji
+  plus name with who and when (`❤️ love (Alice, 14:05)`), LINE emoji reactions as
+  `LINE emoji <productId>/<emojiId>` with a link to the public sticon image, unknown shapes as
+  `reaction (type unknown)`.
 - Tests: Windows installer PATH helper uses Windows path rules on every OS, and `setup --check` tests no longer depend on the CI host's keyring (Linux/macOS CI).
 - `sync.py <CHAT_ID>` without `--name` no longer leaves the archive folder and the `messages.md`
   title as the bare ID: the name is looked up (contacts for direct chats, one cached

@@ -6,6 +6,7 @@ contact names and the failure list in state.json.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, tzinfo
@@ -15,7 +16,17 @@ from .media import LABEL, kind_of
 from .store import safe_id
 
 SELF_LABEL = "Me"
-REACTIONS = {2: "like", 3: "love", 4: "laugh", 5: "surprise", 6: "sad", 7: "angry"}
+# LINE's built-in reactions (line-cli pkg/line/reaction.go PredefinedReactionEmoji/Name)
+REACTIONS = {
+    2: ("👍", "like"),
+    3: ("❤️", "love"),
+    4: ("😆", "laugh"),
+    5: ("😮", "surprise"),
+    6: ("😢", "sad"),
+    7: ("😡", "angry"),
+}
+STICON_URL = "https://stickershop.line-scdn.net/sticonshop/v1/sticon/{product}/android/{emoji}.png"
+_ID_PART = re.compile(r"^[A-Za-z0-9_-]+$")
 UNSUPPORTED = {7: "Sticker", 13: "Contact card", 22: "Rich message"}
 SYSTEM_EVENT_TYPE = 18  # shown as a neutral label; what it means is not known
 DEFAULT_QUIET_GAP_DAYS = 3
@@ -119,7 +130,30 @@ def body_text(
     return text if isinstance(text, str) and text else "(empty message)"
 
 
-def _reactions(record: Mapping[str, Any], names: Mapping[str, str], self_mid: str | None) -> str:
+def reaction_label(rtype: Any) -> str:
+    """Text for one ``reactionType``: built-in emoji + name, LINE emoji, or an unknown marker."""
+    if not isinstance(rtype, dict):
+        return "reaction (type unknown)"
+    code = rtype.get("predefinedReactionType")
+    if isinstance(code, str) and code.isdigit():
+        code = int(code)
+    if isinstance(code, int) and not isinstance(code, bool) and code in REACTIONS:
+        emoji, name = REACTIONS[code]
+        return f"{emoji} {name}"
+    paid = rtype.get("paidReactionType")
+    if isinstance(paid, dict):
+        product, emoji_id = paid.get("productId"), paid.get("emojiId")
+        if isinstance(product, str) and isinstance(emoji_id, str) and product and emoji_id:
+            text = f"LINE emoji {_clean(product)}/{_clean(emoji_id)}"
+            if _ID_PART.match(product) and re.fullmatch(r"\d{3}", emoji_id):
+                return f"[{text}]({STICON_URL.format(product=product, emoji=emoji_id)})"
+            return text
+    return "reaction (type unknown)"
+
+
+def _reactions(
+    record: Mapping[str, Any], names: Mapping[str, str], self_mid: str | None, tz: tzinfo | None
+) -> str:
     items = record.get("reactions")
     if not isinstance(items, list) or not items:
         return ""
@@ -127,10 +161,13 @@ def _reactions(record: Mapping[str, Any], names: Mapping[str, str], self_mid: st
     for item in items:
         if not isinstance(item, dict):
             continue
-        rtype = item.get("reactionType") or {}
-        code = rtype.get("predefinedReactionType") if isinstance(rtype, dict) else None
-        label = REACTIONS.get(code, "reaction")
-        parts.append(f"{label} ({sender_label(item.get('fromUserMid'), names, self_mid)})")
+        at = item.get("atMillis")
+        if isinstance(at, str) and at.isdigit():
+            at = int(at)
+        when = _fmt_time(at, tz)
+        who = sender_label(item.get("fromUserMid"), names, self_mid)
+        stamp = f", {when:%H:%M}" if when else ""
+        parts.append(f"{reaction_label(item.get('reactionType'))} ({_clean(who)}{stamp})")
     return f"reactions: {', '.join(parts)}" if parts else ""
 
 
@@ -223,7 +260,7 @@ def render_markdown(
                 extras.append(f'in reply to {who}: "{_snippet(target["text"])}"')
             else:
                 extras.append("in reply to an earlier message")
-        reaction_text = _reactions(rec, names, self_mid)
+        reaction_text = _reactions(rec, names, self_mid, tz)
         if reaction_text:
             extras.append(reaction_text)
         body_lines = body.split("\n")

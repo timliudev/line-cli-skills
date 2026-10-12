@@ -192,3 +192,94 @@ def test_atomic_state_write_leaves_no_temp_files(tmp_path):
     store.write_json(target / "state.json", {"a": 2})
     assert [p.name for p in target.iterdir()] == ["state.json"]
     assert store.read_json(target / "state.json", None) == {"a": 2}
+
+
+# ------------------------------------------------------------------ duplicate folder merge
+
+
+def _seed(folder, records, *, state=None, files=None):
+    folder.mkdir(parents=True)
+    store.write_jsonl(folder / "messages.jsonl", records)
+    if state:
+        store.write_json(folder / "state.json", {**store.new_state(GID), **state})
+    for name, data in (files or {}).items():
+        (folder / "files").mkdir(exist_ok=True)
+        (folder / "files" / name).write_bytes(data)
+
+
+def _rec(mid, text="hi", **extra):
+    return {"id": mid, "created_time": 1_760_000_000_000 + int(mid), "text": text, **extra}
+
+
+def test_merge_old_and_new_layout_duplicates(tmp_path):
+    new, old = tmp_path / f"Family__{GID}", tmp_path / f"{GID}__Family"
+    broken = _rec("2", "", status="decryption_failed", error="no keys")
+    reaction = {"fromUserMid": "u1", "reactionType": {"predefinedReactionType": 3}}
+    _seed(
+        new,
+        [_rec("1"), broken],
+        state={"last_sync_at": "2026-10-01T00:00:00Z", "failed_files": {"1": {"reason": "x"}}},
+        files={"20251009-100000_1.jpg": b"same"},
+    )
+    _seed(
+        old,
+        [_rec("2", "readable", status="decrypted", reactions=[reaction]), _rec("3")],
+        state={"last_sync_at": "2026-10-05T00:00:00Z", "failed_files": {"3": {"reason": "y"}}},
+        files={"20251009-100000_1.jpg": b"same", "20251009-110000_3.jpg": b"three"},
+    )
+    kept, warnings = store.merge_chat_dirs(tmp_path, GID)
+    assert kept == new and warnings == []
+    assert not old.exists()
+    records = {r["id"]: r for r in store.read_jsonl(new / "messages.jsonl")[0]}
+    assert sorted(records) == ["1", "2", "3"]
+    assert records["2"]["text"] == "readable" and records["2"]["reactions"] == [reaction]
+    state = store.read_state(new / "state.json", GID)
+    assert state["last_sync_at"] == "2026-10-05T00:00:00Z"
+    assert state["newest_message_id"] == "3" and set(state["failed_files"]) == {"1", "3"}
+    assert sorted(p.name for p in (new / "files").iterdir()) == [
+        "20251009-100000_1.jpg",
+        "20251009-110000_3.jpg",
+    ]
+    again, warnings = store.merge_chat_dirs(tmp_path, GID)  # idempotent
+    assert again == new and warnings == []
+    assert len(store.read_jsonl(new / "messages.jsonl")[0]) == 3
+
+
+def test_merge_bare_into_new_keeps_conflicting_files_and_unsent_marks(tmp_path):
+    new, bare = tmp_path / f"Family__{GID}", tmp_path / GID
+    _seed(new, [_rec("1")], files={"20251009-100000_1.jpg": b"AAAA"})
+    _seed(
+        bare,
+        [_rec("1", possibly_unsent_at="2026-10-02T00:00:00Z")],
+        files={"20251009-100000_1.jpg": b"BBBB"},
+    )
+    kept, warnings = store.merge_chat_dirs(tmp_path, GID)
+    assert kept == new and warnings == [] and not bare.exists()
+    assert store.read_jsonl(new / "messages.jsonl")[0][0]["possibly_unsent_at"] == (
+        "2026-10-02T00:00:00Z"
+    )
+    files = {p.name: p.read_bytes() for p in (new / "files").iterdir()}
+    assert files == {"20251009-100000_1.jpg": b"AAAA", "20251009-100000_1-1.jpg": b"BBBB"}
+    assert store.merge_chat_dirs(tmp_path, GID)[1] == []
+
+
+def test_merge_never_deletes_a_folder_with_leftovers(tmp_path):
+    new, old = tmp_path / f"Family__{GID}", tmp_path / f"{GID}__Family"
+    _seed(new, [_rec("1")])
+    _seed(old, [_rec("2")])
+    (old / "notes.txt").write_text("keep me", encoding="utf-8")
+    kept, warnings = store.merge_chat_dirs(tmp_path, GID)
+    assert kept == new and any("still has content" in w for w in warnings)
+    assert (old / "notes.txt").read_text(encoding="utf-8") == "keep me"
+    assert len(store.read_jsonl(new / "messages.jsonl")[0]) == 2
+
+
+def test_sync_merges_duplicates_and_stops_warning(fake_line, archive_root, capsys):
+    _seed(archive_root / f"Family__{GID}", [msg(1, 0, "one")])
+    _seed(archive_root / f"{GID}__Family", [msg(2, 1, "two")])
+    fake_line.scenario(base_rules(messages_rule([msg(1, 0, "one"), msg(2, 1, "two")])))
+    code, out = run_sync(capsys, CHAT, "--name", "Family")
+    assert code == 0 and out["warnings"] == [] and out["new_messages"] == 0
+    assert [p.name for p in archive_root.iterdir() if p.is_dir()] == [f"Family__{GID}"]
+    folder = archive_root / f"Family__{GID}"
+    assert "**Alice**: two" in (folder / "messages.md").read_text(encoding="utf-8")
