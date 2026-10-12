@@ -1,0 +1,18 @@
+{
+  "name": "line-cli",
+  "version": "0.0.1",
+  "description": "Operate a personal LINE account from Claude Code via the unofficial kongesque/line-cli: read, sync/archive, and send with confirmation.",
+  "author": {
+    "name": "Tim Liu",
+    "email": "27921307+timliudev@users.noreply.github.com"
+  },
+  "homepage": "https://github.com/timliudev/line-cli-skills",
+  "repository": "https://github.com/timliudev/line-cli-skills",
+  "license": "MIT",
+  "keywords": [
+    "line",
+    "line-cli",
+    "messaging",
+    "chat-archive"
+  ]
+}

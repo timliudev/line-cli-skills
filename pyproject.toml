@@ -1,0 +1,24 @@
+# Dev tooling only (pytest, ruff). This repo is a Claude Code plugin marketplace,
+# not a distributable Python package.
+[project]
+name = "line-cli-skills-dev"
+version = "0.0.0"
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [
+  "plugins/line-cli/skills/line-cli/scripts",
+  "plugins/media-digest/skills/media-digest/scripts",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]

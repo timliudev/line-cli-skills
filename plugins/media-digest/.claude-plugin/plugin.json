@@ -1,0 +1,20 @@
+{
+  "name": "media-digest",
+  "version": "0.0.1",
+  "description": "Digest video and audio files into keyframes and a timestamped transcript so Claude can understand them. Pluggable ASR backends.",
+  "author": {
+    "name": "Tim Liu",
+    "email": "27921307+timliudev@users.noreply.github.com"
+  },
+  "homepage": "https://github.com/timliudev/line-cli-skills",
+  "repository": "https://github.com/timliudev/line-cli-skills",
+  "license": "MIT",
+  "keywords": [
+    "video",
+    "audio",
+    "transcription",
+    "asr",
+    "whisper",
+    "ffmpeg"
+  ]
+}

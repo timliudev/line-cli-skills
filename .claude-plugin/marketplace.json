@@ -1,0 +1,21 @@
+{
+  "name": "line-cli-skills",
+  "owner": {
+    "name": "Tim Liu"
+  },
+  "metadata": {
+    "description": "Claude Code skills for operating a personal LINE account via the unofficial line-cli, and for digesting video/audio attachments."
+  },
+  "plugins": [
+    {
+      "name": "line-cli",
+      "source": "./plugins/line-cli",
+      "description": "Read, sync, archive and (with confirmation) send LINE messages through the unofficial kongesque/line-cli client."
+    },
+    {
+      "name": "media-digest",
+      "source": "./plugins/media-digest",
+      "description": "Turn videos and audio into keyframes plus a timestamped transcript that Claude can read."
+    }
+  ]
+}
