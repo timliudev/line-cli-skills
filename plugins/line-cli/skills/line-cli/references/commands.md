@@ -2,8 +2,9 @@
 
 Matches line-cli v0.4.0 (verified 2026-10-12)
 
-Source paths are relative to the upstream repo `D:\Line_cli_skill\line-cli`.
-Line numbers refer to that checkout (HEAD is v0.4.0 plus 3 commits, `d3e79ff`).
+Source paths are relative to the upstream repo [kongesque/line-cli](https://github.com/kongesque/line-cli).
+Line numbers refer to a checkout at v0.4.0 plus 3 commits (`d3e79ff`), so they can be a few lines
+off against the v0.4.0 tag.
 
 ## Contents
 

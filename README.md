@@ -2,7 +2,7 @@
 
 English | [繁體中文（台灣）](README.zh-TW.md) | [日本語](README.ja.md) | [ภาษาไทย](README.th.md)
 
-Claude Code skills for working with a **personal LINE account** and the media people send you. Status: **early development (v0.0.x)** - reading, sending, local sync/archive and media digestion work.
+Claude Code skills for working with a **personal LINE account** and the media people send you. Status: **v0.1.0, first release (early software)** - reading and local sync/archive were tested live on Windows, media digestion on synthetic media; sending is blocked by an upstream bug. Details under [Status](#status).
 
 <a id="disclaimer"></a>
 
@@ -53,7 +53,16 @@ See the [user guide](docs/GUIDE.md) for details, configuration and troubleshooti
 
 ## Status
 
-Early development. Implemented: guided install and login, reading and searching chats, local sync and archive of chat history (`sync.py`) with automatic attachment downloads, confirmed send/react/unsend, media digestion and speech-to-text backends. See the [user guide](docs/GUIDE.md) and the [changelog](CHANGELOG.md). Known limit: if upstream `chats --search` fails, name search covers active chats only (the guide's troubleshooting table has this and two other fixes). Known upstream bug: sending to some direct chats fails (LINE rejects the encryption version); Claude tells you it was not sent, and you send it from the LINE app.
+**v0.1.0 is the first release: early software.** How far each part has been tested:
+
+- **Tested live** (a real LINE account, **Windows only**): guided install, login, chat-name resolution, sync and archive, attachment downloads, group names.
+- **macOS and Linux:** unit tests only. These have not been tried on a real macOS or Linux machine yet.
+- **Sending has not been verified live and is blocked by an upstream bug.** `send` to some direct chats fails (LINE rejects the encryption version, TalkException 86). Nothing is delivered, Claude tells you the message was not sent, and you send it from the LINE app. Reacting and unsending are implemented (confirmed every time) but have not been tried live either.
+- **media-digest:** keyframe extraction was tested on synthetic media made with ffmpeg, not on real recordings. The speech-to-text adapters (faster-whisper, whisper.cpp, OpenAI-compatible, custom command) have **not** been run against a real engine or service yet; their unit tests use fakes.
+- **Evals:** the 7 plugin evals ([docs/EVALS.md](docs/EVALS.md)) were run once each (3 runs per case) and all 7 passed. They check skill triggering and ask-before-writing behavior, not LINE itself.
+- **Known limit:** if upstream `chats --search` fails, name search covers active chats only (the user guide's troubleshooting table has this and two other fixes).
+
+See the [user guide](docs/GUIDE.md) and the [changelog](CHANGELOG.md).
 
 ## Credits
 

@@ -116,6 +116,9 @@ backends need a 16 kHz mono WAV; `digest.py --keep-audio` leaves one at `DIR/<id
   adapter reports `too_large` and the chain moves on to the next one.
 - With `--lang auto`, language-specific routes are not applied after detection; pass `--lang`
   when the user's config routes by language.
+- v0.1.0 status: frame extraction is tested on synthetic media, but the speech-to-text adapters
+  have not yet been run against a real engine or cloud service (unit tests with fakes only). If a
+  transcript fails or looks wrong, say so plainly, offer the frames, and suggest another backend.
 
 ## References (read when needed)
 

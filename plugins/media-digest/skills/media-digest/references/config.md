@@ -23,7 +23,7 @@ both local.
 2. Windows: `%APPDATA%\media-digest\config.toml`
 3. macOS and Linux: `$XDG_CONFIG_HOME/media-digest/config.toml`, or `~/.config/media-digest/config.toml`
 
-A missing file is fine. A file with invalid TOML, unknown keys or wrong types is an error: ASR
+A missing file is fine. A file with invalid TOML, unknown adapter keys or wrong types is an error: ASR
 returns `config: ...` with the reason and the digest falls back to frames only. Fix the file and
 re-run. Check with `cd "${CLAUDE_SKILL_DIR}/scripts" && python -m mdcore.asr list`.
 

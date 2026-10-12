@@ -30,7 +30,7 @@
    - Windows：使用官方 PowerShell 安裝程式，安裝至 `%LOCALAPPDATA%\line-cli\bin`。
    - macOS：若已安裝 Homebrew，使用 `brew install kongesque/tap/line-cli`；否則使用官方 shell 安裝程式，安裝至 `~/.local/bin`。
    - Linux：官方 shell 安裝程式，安裝至 `~/.local/bin`。
-   - 安裝程式與程式本身都固定為特定且已測試的發行版本（v0.4.0），並以檢查碼驗證。安裝後立即可用，不需要重新開啟終端機。
+   - 安裝程式與程式本身都固定為特定且已測試的發行版本（v0.4.0），並以檢查碼驗證（Homebrew 會安裝 tap 目前的發行版本，無法固定版本）。安裝後立即可用，不需要重新開啟終端機。
    - 在 Linux 桌面環境中，可能缺少系統金鑰圈（keyring）套件。Claude 會顯示 `sudo` 指令，由你自己執行；Claude 絕不會使用 `sudo`。
 2. **登入。** Claude 會先提醒你：**登入會讓你的 LINE Chrome 擴充功能登出**，因為 LINE 同一時間只允許一個此類工作階段。你同意後，會開啟一個新的終端機視窗。請用手機上的 LINE 掃描 QR Code，或在該視窗中輸入電子郵件與密碼登入。Claude 永遠不會看到你的密碼。它最多等待五分鐘，並以你的帳號名稱確認。若無法開啟任何視窗（例如透過 SSH），Claude 會給你一行指令，由你自己執行。
 3. **完成。** 工作階段會儲存在作業系統的安全儲存區中，並大約每週自動更新，因此通常只需要登入一次。只有在 LINE 讓工作階段登出時才需要重新登入。
@@ -53,7 +53,7 @@
 
 ## 附件與 media-digest
 
-- **照片與 PDF。** Claude 會將檔案（上限 20 MiB）下載到暫存資料夾，並直接查看。
+- **照片與 PDF。** Claude 會直接從該聊天室的存檔資料夾開啟檔案（同步時下載，上限 20 MiB）。
 - **影片。** 使用 `media-digest` 時，Claude 會依場景變化將影片切成關鍵影格（預設最多 24 張），並轉寫語音，然後讀取一份 `digest.md`，依時間交錯排列影格與文字。
 - **語音訊息與音訊。** Claude 會轉寫並附上時間戳。
 - 若沒有 `media-digest`，Claude 會告訴你檔案的位置，並說明安裝該 plugin 後就能理解影片與音訊。
@@ -115,7 +115,7 @@ preset = "groq"                                       # api_key_env = "GROQ_API_
 
 ## 疑難排解
 
-請要求 Claude「執行 LINE doctor」。它會從 plugin 的 `skills/line-cli/scripts` 資料夾執行 `setup.py --doctor`，檢查 Python、`line` 程式及其版本、登入狀態、金鑰圈（Linux）、你的設定檔，以及是否有可用更新，並針對每個項目提供白話的修復方式。貼到錯誤回報之前請先檢視輸出；內容可能包含本機路徑與你的帳號名稱。
+請要求 Claude「執行 LINE doctor」。它會從 plugin 的 `skills/line-cli/scripts` 資料夾執行 `setup.py --doctor`，檢查 Python、`line` 程式及其版本、登入狀態、金鑰圈（Linux）、你的設定檔、存檔資料夾是否可寫入，以及是否有可用更新，並針對每個項目提供白話的修復方式。貼到錯誤回報之前請先檢視輸出；內容可能包含本機路徑與你的帳號名稱。
 
 | 症狀 | 處理方式 |
 | --- | --- |

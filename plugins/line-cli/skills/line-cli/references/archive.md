@@ -30,8 +30,9 @@ sync.py --all [same options]
   by a later sync while they are still inside the latest 100 messages.
 - `--name` labels the folder when `CHAT` is an ID. A name found by resolving, or a contact name for
   a direct chat, is used automatically. Without any name the folder is just the chat ID, or keeps
-  its existing name. Group names are not available from `line chats --json`, so a group first
-  synced through `--all` stays unlabeled until it is synced once by name (or with `--name`).
+  its existing name. Group names are not in `line chats --json`, so `--all` takes them from the
+  text listing of active chats (`chats --limit 0 --show-ids`); a group missing from that listing
+  stays unlabeled until it is synced once by name (or with `--name`).
 - `--all` reads `chats --json` and syncs each chat one after another. A chat that fails is
   reported under `failed` and the rest continue; the exit code is `1` if any chat failed.
   Output: `{"all": true, "total": N, "chats": [summary, ...], "failed": [{chat_id, error}]}`.
@@ -56,8 +57,8 @@ sync.py --all [same options]
   the folder is just `<chat_id>`.
 - Folders are found by chat ID: the current `<name>__<chat_id>`, a bare `<chat_id>`, and the older
   `<chat_id>__<name>` layout all match, and the next sync renames them to the current layout
-  (contents untouched). When no name is given and none is stored, a single-chat sync looks the name
-  up (direct chats via contacts, groups and rooms via `chats --limit 0 --show-ids`, one call per
+  (contents untouched). When no name is given and none is stored, a sync looks the name up
+  (direct chats via contacts, groups and rooms via `chats --limit 0 --show-ids`, one call per
   run); if that fails the folder stays id-only, silently.
 - `messages.jsonl` holds the CLI's items unchanged plus one archive-only field,
   `possibly_unsent_at` (ISO UTC time). Deleting `messages.md` is harmless; the next sync rebuilds it.
@@ -91,6 +92,7 @@ Precedence for the archive location, highest first:
 (`~/.config/line-skill/`) elsewhere:
 
 ```toml
+line_path = "/opt/fork/line"                  # optional: use this `line` (a file, or a folder holding it)
 archive_root = "D:/somewhere/line-personal"
 [download]
 types = ["image", "video", "audio", "file"]   # attachment types downloaded automatically

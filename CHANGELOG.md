@@ -5,24 +5,24 @@ All notable changes to this project are documented here. Format based on
 
 ## [Unreleased]
 
-### Fixed
-- `sync.py <CHAT_ID>` without `--name` no longer leaves the archive folder and the `messages.md`
-  title as the bare ID: the name is looked up (contacts for direct chats, one cached
-  `chats --limit 0 --show-ids` call for groups and rooms) and an id-only folder is renamed. If the
-  lookup fails the folder stays id-only, silently.
+## [0.1.0] - 2026-10-13
 
-### Changed
-- Archive folders are now named `<chat name>__<chat_id>` (name first, full ID kept intact, name
-  part truncated first). Existing `<chat_id>` and `<chat_id>__<name>` folders are found by ID and
-  renamed automatically on the next sync, contents untouched.
-- `messages.md`: content type 18 reads `[System event (type 18)]`, other unsupported types read
-  `[Unsupported content (type N)]`, and a "no messages for X days (from -> to)" line marks silences
-  longer than the new `render.quiet_gap_days` setting (default 3, `0` disables).
+First release. This is early software: the list below says exactly what has been tested and how.
+
+### Status
+- **Tested live** (a real LINE account, Windows only): guided install, login, chat-name resolution
+  (`lineq.py resolve`), sync and archive (`sync.py`), attachment downloads, group names.
+- **macOS and Linux:** covered by unit tests only; not tried on a real machine.
+- **`send` is blocked by an upstream bug** (line-cli v0.4.0, LINE error 10051 / TalkException 86,
+  see Known issues). Sending, reacting and unsending were not verified live; they are covered by
+  unit tests only.
+- **media-digest:** keyframe extraction was tested on synthetic media generated with ffmpeg. The
+  speech-to-text adapters (`faster_whisper`, `whisper_cpp`, `openai_compat`, `command`) have **not**
+  been run against a real engine or service yet; their unit tests use fakes.
+- **Evals:** the 7 plugin evals were run once each (3 runs per case, 2026-10-12) and all passed.
 
 ### Added
-- M1 skeleton: marketplace manifest, `line-cli` and `media-digest` plugin manifests,
-  placeholder skills, package stubs, manifest tests and CI.
-- Multilingual documentation (English, zh-TW, ja, th): README and user guide stubs.
+- Marketplace manifest, `line-cli` and `media-digest` plugin manifests, manifest tests and CI.
 - Plugin evals (M4) in the official layout `plugins/<plugin>/evals/`: skill triggering, no trigger
   for LINE OA questions, confirm-before-send/unsend, no retry after a timeout, login warning.
   How to run and cost guidance: `docs/EVALS.md`.
@@ -62,8 +62,24 @@ All notable changes to this project are documented here. Format based on
   disclaimer, with tests for existence, language switchers and equal section structure.
 - CI `docs-sync` check: pull requests that change `plugins/**` or `.claude-plugin/**` must also
   change documentation (label `no-docs` to bypass).
+- Release notes: `docs/RELEASE_NOTES_v0.1.0.md`.
+
+### Changed
+- Archive folders are now named `<chat name>__<chat_id>` (name first, full ID kept intact, name
+  part truncated first). Existing `<chat_id>` and `<chat_id>__<name>` folders are found by ID and
+  renamed automatically on the next sync, contents untouched.
+- `messages.md`: content type 18 reads `[System event (type 18)]`, other unsupported types read
+  `[Unsupported content (type N)]`, and a "no messages for X days (from -> to)" line marks silences
+  longer than the new `render.quiet_gap_days` setting (default 3, `0` disables).
+- `lineq.py resolve`: a single partial-name match (no exact match) now resolves directly
+  (`status: resolved`, `matched_by: "substring"`) instead of asking the user to pick from one
+  option. Two or more matches still return `candidates`.
 
 ### Fixed
+- `sync.py <CHAT_ID>` without `--name` no longer leaves the archive folder and the `messages.md`
+  title as the bare ID: the name is looked up (contacts for direct chats, one cached
+  `chats --limit 0 --show-ids` call for groups and rooms) and an id-only folder is renamed. If the
+  lookup fails the folder stays id-only, silently.
 - `lineq.py resolve` no longer dies when upstream `chats --search` fails (it names all chats,
   including inactive ones, and one failing batch fails the call): it falls back to the parsed text
   listing `chats --limit 0 --show-ids` (active chats only, new `linecore/chatlist.py`) and warns
@@ -75,11 +91,17 @@ All notable changes to this project are documented here. Format based on
   of silently sending empty input ("message must not be empty").
 - Windows install under Git Bash: `_windows_installer_env` puts System32 first on PATH so the
   installer's `tar.exe` is Windows' bsdtar, not Git's GNU tar; covered by unit tests.
-
-### Changed
-- `lineq.py resolve`: a single partial-name match (no exact match) now resolves directly
-  (`status: resolved`, `matched_by: "substring"`) instead of asking the user to pick from one
-  option. Two or more matches still return `candidates`.
+- Documentation audit against the code: `references/archive.md` no longer says groups synced through
+  `--all` stay unlabeled (they are named from the active-chat listing); `SKILL.md` shows the correct
+  `lineq.py run -- watch --timeout 30s` form (lineq's own `--timeout` takes plain seconds) and says
+  exit code `4` is shared by `resolve` and `sync.py`; `references/install.md` no longer claims the ASR
+  engines were tested with a real model; the maintainer's local checkout path was removed from
+  `references/commands.md`; `docs/EVALS.md` counts 4 `llm` graders; GUIDE: attachments are read from
+  the archive (not a temporary folder), Homebrew installs cannot be pinned, and `--doctor` also
+  checks that the archive folder is writable (all four languages).
+- CI: `astral-sh/setup-uv@v10` does not exist (no floating major tag), which would have failed every
+  test job; tools are now installed with pip. Added a non-blocking job that runs the media tests with
+  a real ffmpeg on Linux.
 
 ### Known issues
 - Upstream line-cli v0.4.0: `send` to some direct chats fails with LINE error 10051 / TalkException
@@ -90,3 +112,6 @@ All notable changes to this project are documented here. Format based on
 - Upstream `getContactsV2` rejects the whole batch when LINE returns userStatus-only stubs (deleted
   accounts, non-friend group members), which breaks `chats --search` and `contacts --mid`. Worked
   around in the skill (see Fixed). Details: `references/errors.md`, "Known upstream bugs".
+- media-digest: audio above a cloud adapter's upload limit (25 MB) is not split or compressed yet, so
+  that adapter fails with `too_large` and the next one in the chain takes over. With `--lang auto`
+  the per-language routes in `config.toml` are not applied; pass `--lang`.

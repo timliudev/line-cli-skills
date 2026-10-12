@@ -24,9 +24,12 @@ claude plugin eval plugins/line-cli --case "trigger-*" --runs 1 --ablation none 
 claude plugin eval plugins/line-cli --runs 3 --max-cost-usd 5 --threshold 0.8 --judge-model haiku
 ```
 
-Cost guidance: 7 cases x 3 runs x 2 arms is about 42 agent runs, plus judge calls for the 5 `llm` graders.
+Cost guidance: 7 cases x 3 runs x 2 arms is about 42 agent runs, plus judge calls for the 4 `llm` graders.
 Start with `--runs 1 --ablation none --max-cost-usd 1`; use `--max-cost-usd 5` for a full 3-run suite;
 the full suite with baseline should stay under about 10 USD. Results go to `plugins/<plugin>/evals/results/` (git-ignored).
+
+Status for v0.1.0: each suite was run once on 2026-10-12 (Claude Code 2.1.296, `--ablation none`,
+3 runs per case, about 1.4 USD in total) and all 7 cases passed. That is a single run, not a trend.
 
 ## Limits (read this)
 

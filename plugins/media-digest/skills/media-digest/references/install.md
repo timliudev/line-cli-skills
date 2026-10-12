@@ -29,8 +29,9 @@ Python 3.11 or newer runs the scripts themselves.
 
 ## ffmpeg and ffprobe
 
-Tested with ffmpeg 9.0.2. Download is on the order of 100 MB or more depending on OS. Both
-`ffmpeg` and `ffprobe` must be found; the packages below ship both.
+Frame extraction was tried with ffmpeg 9.0.2 on Windows, on synthetic media. Download is on the
+order of 100 MB or more depending on OS. Both `ffmpeg` and `ffprobe` must be found; the packages
+below ship both.
 
 | OS | Command |
 | --- | --- |
@@ -49,7 +50,7 @@ Tested with ffmpeg 9.0.2. Download is on the order of 100 MB or more depending o
 
 ## uv
 
-Tested with uv 0.13.0. Small download (tens of MB). Needed only for the PEP 723 adapters
+Developed with uv 0.12.x; any recent uv should work. Small download (tens of MB). Needed only for the PEP 723 adapters
 (`faster_whisper`).
 
 | OS | Command |
@@ -63,7 +64,8 @@ consent. Open a new terminal afterwards if `uv` is not found.
 
 ## faster-whisper (local, easiest)
 
-Tested with faster-whisper 1.2.1. Needs `uv` (or the `faster-whisper` Python package already
+Written against faster-whisper 1.2.1. **Not yet tested with a real engine and model**: only the
+probe and unit tests with fakes exist, so expect rough edges on a first real run. Needs `uv` (or the `faster-whisper` Python package already
 installed in the Python that runs the scripts).
 
 - No manual install: `digest.py` runs the adapter with `uv run --script`, which fetches
@@ -89,7 +91,8 @@ installed in the Python that runs the scripts).
 
 ## whisper.cpp (local)
 
-Tested with whisper.cpp v1.9.5. Two parts: the `whisper-cli` program and a ggml model file.
+Written against whisper.cpp v1.9.5 (`whisper-cli -oj`). **Not yet tested with a real binary and
+model**, only with fakes. Two parts: the `whisper-cli` program and a ggml model file.
 
 | OS | Program |
 | --- | --- |

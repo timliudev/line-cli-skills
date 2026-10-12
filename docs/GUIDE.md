@@ -30,7 +30,7 @@ When you first ask about LINE, Claude runs a check and then walks you through wh
    - Windows: the official PowerShell installer, to `%LOCALAPPDATA%\line-cli\bin`.
    - macOS: Homebrew (`brew install kongesque/tap/line-cli`) if you have it, otherwise the official shell installer, to `~/.local/bin`.
    - Linux: the official shell installer, to `~/.local/bin`.
-   - The installer script and the program are fixed to a specific tested release (v0.4.0) and verified by checksum. It works right away, without reopening your terminal.
+   - The installer script and the program are fixed to a specific tested release (v0.4.0) and verified by checksum (Homebrew installs the tap's current release instead, so it cannot be pinned). It works right away, without reopening your terminal.
    - On Linux desktops the system keyring packages may be missing. Claude shows you the `sudo` command and you run it yourself; Claude never uses `sudo`.
 2. **Log in.** Claude warns you first: **logging in signs you out of the LINE Chrome extension**, because LINE allows one such session at a time. After your yes, a new terminal window opens. Scan the QR code with LINE on your phone, or sign in with email and password typed into that window. Claude never sees your password. It waits up to five minutes and confirms with your account name. If no window can be opened (for example over SSH), Claude gives you the one command to run yourself.
 3. **Done.** The session is stored in your operating system's secure storage and renews itself, about every week, so you normally log in only once. Logging in again is needed only if LINE signs the session out.
@@ -53,7 +53,7 @@ Just ask, for example "What did the Family group say today?" or "Any new message
 
 ## Attachments and media-digest
 
-- **Photos and PDFs.** Claude downloads the file (up to 20 MiB) to a temporary folder and looks at it directly.
+- **Photos and PDFs.** Claude opens the file directly from the chat's archive folder (downloaded during a sync, up to 20 MiB).
 - **Videos.** With `media-digest`, Claude cuts the video into keyframes (by scene changes, at most 24 by default) and transcribes the speech, then reads one `digest.md` that interleaves frames and text by time.
 - **Voice messages and audio.** Claude transcribes them with timestamps.
 - Without `media-digest`, Claude tells you the file's location and that installing the plugin lets it understand videos and audio.
@@ -115,7 +115,7 @@ preset = "groq"                                       # api_key_env = "GROQ_API_
 
 ## Troubleshooting
 
-Ask Claude to "run the LINE doctor". It runs `setup.py --doctor` from the plugin's `skills/line-cli/scripts` folder, which checks Python, the `line` program and its version, login, the keyring (Linux), your config file, and whether an update exists, and gives a plain-language fix for each item. Review the output before pasting it into a bug report; it can contain local paths and your account name.
+Ask Claude to "run the LINE doctor". It runs `setup.py --doctor` from the plugin's `skills/line-cli/scripts` folder, which checks Python, the `line` program and its version, login, the keyring (Linux), your config file, whether the archive folder is writable, and whether an update exists, and gives a plain-language fix for each item. Review the output before pasting it into a bug report; it can contain local paths and your account name.
 
 | Symptom | What to do |
 | --- | --- |

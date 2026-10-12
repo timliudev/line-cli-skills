@@ -30,7 +30,7 @@ If `python` is not found, try `python3`, or `py -3` on Windows. Python 3.11 or n
 if only an older Python exists, tell the user and offer to help install a newer one.
 
 Shared exit codes: `0` ok, `1` failed, `2` usage error, `3` needs the user (a confirmation, a
-choice, or a manual step), `4` (resolve only) nothing found.
+choice, or a manual step), `4` (`lineq.py resolve` and `sync.py` only) no chat matched.
 
 ## First-run flow
 
@@ -93,8 +93,10 @@ each problem. More detail (login methods, Linux, updates) is in
 3. **Answer the user** in their language, citing time and sender ("Anna, 14:03: ..."). Quote only
    what the task needs. Attachments appear in `messages.md` as links to files in the archive (next
    sections). Stickers and other unsupported types can only be mentioned.
-4. **Watching for new messages** is `run --timeout 30s -- watch` (a timeout or `--limit` is
-   required, because watch never ends). Prefer `sync.py` unless the user asks for it.
+4. **Watching for new messages** is `run -- watch --timeout 30s` (watch never ends on its own, so
+   lineq requires `--timeout DURATION` and/or `--limit N` after the `--`). lineq's own `--timeout`
+   (plain seconds, before the `--`, default 60) must be longer than the watch duration. Prefer
+   `sync.py` unless the user asks for it.
 
 Other reads: `chats --search TEXT --json`, `contacts --search TEXT --json`. Plain `chats --json`
 has IDs only, no names, so always search. All flags: [references/commands.md](references/commands.md).
