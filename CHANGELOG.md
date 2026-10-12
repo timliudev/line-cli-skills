@@ -48,3 +48,31 @@ All notable changes to this project are documented here. Format based on
   disclaimer, with tests for existence, language switchers and equal section structure.
 - CI `docs-sync` check: pull requests that change `plugins/**` or `.claude-plugin/**` must also
   change documentation (label `no-docs` to bypass).
+
+### Fixed
+- `lineq.py resolve` no longer dies when upstream `chats --search` fails (it names all chats,
+  including inactive ones, and one failing batch fails the call): it falls back to the parsed text
+  listing `chats --limit 0 --show-ids` (active chats only, new `linecore/chatlist.py`) and warns
+  "searched active chats only".
+- `sync.py --all` names archive folders of active chats from the same listing.
+- Group sender names: when `contacts --mid` cannot resolve a non-friend member, sync reads names
+  from `messages CHAT --show-ids` text (new `linecore/msgtext.py`) and caches them in `contacts.json`.
+- `lineq.py run` forwards stdin automatically when the `line` arguments contain `--stdin`, instead
+  of silently sending empty input ("message must not be empty").
+- Windows install under Git Bash: `_windows_installer_env` puts System32 first on PATH so the
+  installer's `tar.exe` is Windows' bsdtar, not Git's GNU tar; covered by unit tests.
+
+### Changed
+- `lineq.py resolve`: a single partial-name match (no exact match) now resolves directly
+  (`status: resolved`, `matched_by: "substring"`) instead of asking the user to pick from one
+  option. Two or more matches still return `candidates`.
+
+### Known issues
+- Upstream line-cli v0.4.0: `send` to some direct chats fails with LINE error 10051 / TalkException
+  86 (`sender or receiver not supported e2ee or version mismatch`). The peer key has e2eeVersion 0
+  while the CLI always encrypts V2, and the real cause is hidden behind a generic "request failed".
+  Nothing is delivered; the skill says so, does not retry and suggests sending from the LINE app.
+  Parked; no upstream issue or PR yet.
+- Upstream `getContactsV2` rejects the whole batch when LINE returns userStatus-only stubs (deleted
+  accounts, non-friend group members), which breaks `chats --search` and `contacts --mid`. Worked
+  around in the skill (see Fixed). Details: `references/errors.md`, "Known upstream bugs".

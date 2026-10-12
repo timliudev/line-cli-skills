@@ -74,6 +74,27 @@ def _download(url: str) -> bytes:
     return data
 
 
+def _windows_installer_env(env: dict[str, str]) -> dict[str, str]:
+    """Put System32 first on PATH for the PowerShell installer.
+
+    The upstream script calls `tar.exe`. When Claude Code runs under Git Bash,
+    PATH starts with Git's GNU tar, which reads `C:\\...` as a remote host and
+    fails; Windows' bundled bsdtar in System32 handles the archive correctly.
+    """
+    env = dict(env)
+    system32 = os.path.join(
+        env.get("SystemRoot") or env.get("SYSTEMROOT") or r"C:\Windows", "System32"
+    )
+    key = next((k for k in env if k.upper() == "PATH"), "PATH")
+    rest = [
+        p
+        for p in env.get(key, "").split(os.pathsep)
+        if p and os.path.normcase(p) != os.path.normcase(system32)
+    ]
+    env[key] = os.pathsep.join([system32, *rest])
+    return env
+
+
 def _run_installer(cmd: list[str], env: dict[str, str]) -> tuple[int, str]:
     """Run the installer; returns (exit_code, combined output tail)."""
     proc = subprocess.run(  # noqa: S603 - fixed argv built by this module
@@ -369,6 +390,7 @@ def cmd_install(config, *, yes: bool, tag: str, force: bool) -> tuple[dict[str, 
                         },
                         EXIT_FAIL,
                     )
+                env = _windows_installer_env(env)
                 cmd = [
                     shell,
                     "-NoProfile",

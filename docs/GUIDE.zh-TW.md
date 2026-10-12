@@ -131,5 +131,10 @@ preset = "groq"                                       # api_key_env = "GROQ_API_
 | 某則訊息標示 "(possibly unsent)" | 它存檔後從 LINE 最新 100 則中消失，所以很可能已被收回；已儲存的文字仍會保留 |
 | 照片或檔案標示 "expired" 或 "over 20 MiB" | LINE 已不再提供，或超過此用戶端的上限，因此無法下載 |
 | 存檔位於 git repository 內的警告 | 將 `archive_root`（或 `LINE_SKILL_ARCHIVE`）設為 repository 以外的資料夾 |
+| 搜尋聊天室名稱出現 "LINE request failed" | 上游會一次替所有聊天室（含不活躍的）取名，其中一批失敗就整個失敗。Claude 會改在活躍聊天室中搜尋並告知你；不活躍的聊天室無法用名稱找到，請改用完整 ID |
+| 群組訊息顯示被截斷的 ID 而不是名字 | 非好友的群組成員無法以聯絡人查詢。同步時會改從聊天文字讀取名字並快取；若仍缺名字，代表該成員在最新 100 則內沒發言 |
+| 傳訊息給某一位聯絡人一直失敗，顯示「LINE request failed」 | 上游問題：部分一對一聊天室，LINE 會拒絕 CLI 使用的加密版本（錯誤 10051／86，「e2ee or version mismatch」）。訊息沒有送出，Claude 會直接告知且不會重試。請改用 LINE App 傳送；讀取該聊天室不受影響 |
+| `chats --search` 或查詢群組成員名稱時出現「LINE request failed」 | 上游問題：同一批資料裡只要有已刪除帳號或非好友成員，LINE 的聯絡人查詢就整批失敗。已有替代做法（只搜尋活躍聊天室、改從聊天文字取得名稱），見上面兩列 |
+| 在 Git Bash 下 Windows 安裝出現 `tar` 錯誤 | Git 的 GNU tar 讀不懂 `C:` 路徑。安裝時現在會把 Windows 內建的 System32 放在 PATH 最前面；若手動安裝，請在 PowerShell 執行 |
 
 [回到 README](../README.zh-TW.md)

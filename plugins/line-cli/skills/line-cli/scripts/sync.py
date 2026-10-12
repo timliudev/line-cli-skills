@@ -30,7 +30,7 @@ if sys.version_info < (3, 11):  # noqa: UP036 - friendly message instead of an I
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from linecore import media, names, runner, store  # noqa: E402
+from linecore import chatlist, media, msgtext, names, runner, store  # noqa: E402
 from linecore.config import DOWNLOAD_TYPES, Config, load_config_safe  # noqa: E402
 from linecore.render import render_markdown  # noqa: E402
 
@@ -114,6 +114,32 @@ class Syncer:
             warnings.append(f"ignored {len(result.data) - len(unique)} malformed message item(s)")
         return unique, warnings
 
+    def _text_fallback(self, chat_id: str, records: list[dict[str, Any]], now_ms: int) -> bool:
+        """Fill missing sender names from `messages --show-ids` text (once per sync of a chat).
+
+        Returns True when the names cache gained at least one name.
+        """
+        result = runner.run_line(
+            ["messages", chat_id, "--limit", str(FETCH_LIMIT), "--show-ids"],
+            config=self.config,
+            binary=self.binary,
+        )
+        if not result.ok or not result.text:
+            return False
+        by_message = msgtext.parse_sender_names(result.text)
+        gained = False
+        for rec in records:
+            mid, name = rec.get("from"), by_message.get(str(rec.get("id")))
+            if (
+                name
+                and isinstance(mid, str)
+                and mid
+                and not (self._cache or {}).get(mid, {}).get("name")
+            ):
+                self._cache[mid] = {"name": name, "ts": now_ms, "source": "messages-text"}
+                gained = True
+        return gained
+
     # ------------------------------------------------------------ one chat
 
     def sync_chat(self, chat_id: str, name_hint: str | None = None) -> dict[str, Any]:
@@ -161,6 +187,15 @@ class Syncer:
             binary=self.binary,
         )
         warnings += name_warnings
+        unresolved = [
+            m
+            for m in dict.fromkeys(names.mids_in(records))
+            if m[:1].lower() == "u" and not self._cache.get(m, {}).get("name")
+        ]
+        if unresolved and self._text_fallback(chat_id, records, now_ms):
+            changed = True
+            if all(self._cache.get(m, {}).get("name") for m in unresolved):
+                warnings = [w for w in warnings if w not in name_warnings]
         name_by_mid = names.name_map(self._cache)
         fresh_name = name_hint or (name_by_mid.get(chat_id) if chat_id[:1].lower() == "u" else None)
         chat_name = fresh_name or state.get("name")
@@ -495,11 +530,14 @@ def main(argv: list[str] | None = None) -> int:
         for row in listing.data
         if isinstance(row, dict) and isinstance(row.get("id"), str)
     ]
+    # Active-chat names from the text listing (the JSON listing has IDs only). Best effort.
+    listed, text_listing = chatlist.fetch_active_chats(config=config, binary=syncer.binary)
+    listed_names = chatlist.named_only(listed)
     done: list[dict[str, Any]] = []
     failed: list[dict[str, Any]] = []
     for chat_id in chat_ids:
         try:
-            done.append(syncer.sync_chat(chat_id))
+            done.append(syncer.sync_chat(chat_id, listed_names.get(chat_id)))
         except SyncError as exc:
             failed.append({"chat_id": chat_id, "error": exc.error})
             runner.log(f"warning: {chat_id}: {exc}")

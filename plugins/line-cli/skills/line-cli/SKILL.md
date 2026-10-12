@@ -72,7 +72,8 @@ each problem. More detail (login methods, Linux, updates) is in
 
 1. **Find the chat.** Never guess an ID:
    `python "${CLAUDE_SKILL_DIR}/scripts/lineq.py" resolve "NAME"`
-   - `status: resolved` (exit 0): use `id` and `name`.
+   - `status: resolved` (exit 0): use `id` and `name`. This includes a single partial-name match
+     (`matched_by: "substring"`); there is nothing to choose, just state which chat you picked.
    - `ambiguous` or `candidates` (exit 3): list the options by name and type (group, direct, room)
      and ask the user which one. Never choose for them.
    - `not_found` (exit 4): say so and ask for another spelling.
@@ -139,11 +140,11 @@ for real. Read [references/safety.md](references/safety.md) before the first wri
 3. Run it once, with `--yes` (lineq refuses state-changing commands without it, exit 3):
    - Text (always via stdin, so quotes and newlines survive):
      ```
-     python "${CLAUDE_SKILL_DIR}/scripts/lineq.py" run --yes --stdin -- send CHAT_ID --stdin --json <<'EOF'
+     python "${CLAUDE_SKILL_DIR}/scripts/lineq.py" run --yes -- send CHAT_ID --stdin --json <<'EOF'
      message text here
      EOF
      ```
-     stdin is not trimmed, so a trailing newline is part of the message. Add `--reply-to MESSAGE_ID`
+     lineq forwards stdin automatically when the `line` arguments contain `--stdin`. stdin is not trimmed, so a trailing newline is part of the message. Add `--reply-to MESSAGE_ID`
      to reply.
    - File: `run --yes -- send CHAT_ID --file PATH --json` (generic file, up to 20 MiB).
    - Reaction: `run --yes -- react CHAT_ID --message MESSAGE_ID --reaction like --json`
@@ -154,6 +155,10 @@ for real. Read [references/safety.md](references/safety.md) before the first wri
    lost (timeout, exit 130/143), the message may still have gone out: read the recent messages
    first and tell the user what you find. Only try again after a new explicit yes
    ([references/errors.md](references/errors.md), "Lost response").
+
+Known upstream bug: `send` to some direct chats always fails (LINE rejects the encryption version,
+shown only as a generic "request failed"). Tell the user it was NOT sent, do not retry, and suggest
+sending from the LINE app ([references/errors.md](references/errors.md), "Known upstream bugs").
 
 Never use a write command to "test" something, and never loop over several chats without the user
 naming each one.

@@ -94,6 +94,10 @@ it is still inside the latest 100 messages.
 
 1. `messages CHAT --json --limit 100`, then `contacts --mid ...` for unknown senders (cached for a
    week) and `whoami` to recognise the user's own messages.
+   If `contacts --mid` cannot name a sender (typical for non-friend group members), one extra
+   `messages CHAT --limit 100 --show-ids` (text) call maps message IDs to display names; they are
+   stored in `contacts.json` like any other name. `--all` also names folders of active chats from
+   `chats --limit 0 --show-ids`.
 2. Merge by message ID: new IDs are appended, known IDs refreshed. Nothing is ever deleted.
 3. Download every attachment of the fetched window that has no file yet and whose type is allowed.
    Permanent failures (`expired`, `external`, `too_large`) are recorded in `state.json` and not

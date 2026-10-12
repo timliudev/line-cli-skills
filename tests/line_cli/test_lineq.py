@@ -91,6 +91,27 @@ def test_resolve_substring_candidates_exact_ranked_first(fake_line):
     assert [c["id"] for c in payload["candidates"]] == [GID, UID]  # newest activity first
 
 
+def test_resolve_single_substring_match_resolves(fake_line):
+    fake_line.scenario(
+        [chats_rule("Bo", [chat(GID, "Bo-fans", 99)]), contacts_rule("Bo", [])]
+    )
+    payload, code = lineq.resolve_name("Bo")
+    assert code == 0 and payload["status"] == "resolved"
+    assert payload["id"] == GID and payload["matched_by"] == "substring"
+    assert len(payload["candidates"]) == 1
+
+
+def test_resolve_single_substring_match_keeps_incomplete_flag(fake_line):
+    fake_line.scenario(
+        [
+            rule(["chats", "--search", "Bo", "--json"], exit=1, stderr="LINE request failed"),
+            contacts_rule("Bo", [contact(UID, "Bobby")]),
+        ]
+    )
+    payload, code = lineq.resolve_name("Bo")
+    assert code == 0 and payload["id"] == UID and payload["incomplete"] is True
+
+
 def test_resolve_not_found(fake_line):
     fake_line.scenario([chats_rule("Zed", []), contacts_rule("Zed", [])])
     payload, code = lineq.resolve_name("Zed")
@@ -239,6 +260,19 @@ def test_cli_run_mutation_with_yes_forwards_stdin_once(fake_line):
     assert code == 1 and out["error"]["kind"] == "busy" and out["error"]["retryable"] is False
     assert len(fake_line.calls()) == 1
     assert fake_line.calls()[0]["stdin"] == "哈囉 hello"
+
+
+def test_cli_run_forwards_stdin_when_only_line_args_have_it(fake_line):
+    fake_line.scenario([rule(prefix=["send"], stdout={"id": "m1"})])
+    code, out, _ = run_cli("run", "--yes", "--", "send", UID, "--stdin", "--json", stdin="hello")
+    assert code == 0 and out["ok"]
+    assert fake_line.calls()[0]["stdin"] == "hello"
+
+
+def test_cli_run_does_not_read_stdin_without_the_flag(fake_line):
+    fake_line.scenario([rule(["chats", "--json"], stdout=[chat(UID, "A")])])
+    code, _, _ = run_cli("run", "--", "chats", "--json", stdin="ignored")
+    assert code == 0 and fake_line.calls()[0]["stdin"] == ""
 
 
 def test_cli_run_refuses_login_unbounded_watch_and_stdout_download(fake_line):

@@ -272,11 +272,50 @@ def test_install_windows_runs_pinned_script(fake_line, capsys, monkeypatch):
         == "https://github.com/kongesque/line-cli/releases/download/v0.4.0"
     )
     assert content == script
+    # Git Bash's GNU tar must not shadow Windows' bsdtar: System32 leads PATH for the installer
+    path_key = next(k for k in env if k.upper() == "PATH")
+    assert env[path_key].split(os.pathsep)[0].lower().endswith("system32")
     assert not any("sudo" in part for part in cmd)
     assert out["status"] == "installed" and out["line"]["version"] == "v0.4.0"
     assert out["line"]["source"] == "known"  # not on PATH in this session, still usable
     assert "path_note" in out and out["next"] == "login"
     assert not Path(cmd[-1]).exists()  # temp dir cleaned
+
+
+def _sys32(root):
+    return os.path.join(root, "System32")
+
+
+def test_windows_installer_env_puts_system32_first():
+    root = r"C:\Windows"
+    env = setup._windows_installer_env(
+        {"SystemRoot": root, "PATH": os.pathsep.join(["gitbin", "other"]), "KEEP": "1"}
+    )
+    assert env["PATH"].split(os.pathsep) == [_sys32(root), "gitbin", "other"]
+    assert env["KEEP"] == "1"
+
+
+def test_windows_installer_env_path_key_is_case_insensitive():
+    root = r"D:\Win"
+    original = {"SystemRoot": root, "Path": os.pathsep.join(["a", "b"])}
+    env = setup._windows_installer_env(original)
+    assert "PATH" not in env  # reuses the existing key spelling, no duplicate variable
+    assert env["Path"].split(os.pathsep) == [_sys32(root), "a", "b"]
+    assert original["Path"] == os.pathsep.join(["a", "b"])  # input not mutated
+
+
+def test_windows_installer_env_dedupes_system32_and_empty_entries():
+    root = r"C:\Windows"
+    path = os.pathsep.join(["x", _sys32(root), "", "y", _sys32(root)])
+    env = setup._windows_installer_env({"SystemRoot": root, "PATH": path})
+    assert env["PATH"].split(os.pathsep) == [_sys32(root), "x", "y"]
+
+
+def test_windows_installer_env_without_systemroot_uses_default_and_sets_path():
+    env = setup._windows_installer_env({})
+    assert env["PATH"] == _sys32(r"C:\Windows")
+    upper = setup._windows_installer_env({"SYSTEMROOT": r"E:\W", "PATH": "p"})
+    assert upper["PATH"].split(os.pathsep) == [_sys32(r"E:\W"), "p"]
 
 
 def test_install_linux_never_sudo_and_reports_keyring(fake_line, capsys, monkeypatch):

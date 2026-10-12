@@ -53,7 +53,7 @@ See the [user guide](docs/GUIDE.md) for details, configuration and troubleshooti
 
 ## Status
 
-Early development. Implemented: guided install and login, reading and searching chats, local sync and archive of chat history (`sync.py`) with automatic attachment downloads, confirmed send/react/unsend, media digestion and speech-to-text backends. See the [user guide](docs/GUIDE.md) and the [changelog](CHANGELOG.md).
+Early development. Implemented: guided install and login, reading and searching chats, local sync and archive of chat history (`sync.py`) with automatic attachment downloads, confirmed send/react/unsend, media digestion and speech-to-text backends. See the [user guide](docs/GUIDE.md) and the [changelog](CHANGELOG.md). Known limit: if upstream `chats --search` fails, name search covers active chats only (the guide's troubleshooting table has this and two other fixes). Known upstream bug: sending to some direct chats fails (LINE rejects the encryption version); Claude tells you it was not sent, and you send it from the LINE app.
 
 ## Credits
 

@@ -6,7 +6,7 @@ Subcommands
   run [opts] -- LINE_ARGS Run `line LINE_ARGS` and return {ok, exit_code, data, error}.
 
 Exit codes
-  0  success (resolve: exactly one exact match; run: line succeeded or partial result)
+  0  success (resolve: exactly one exact or substring match; run: line succeeded or partial result)
   1  `line` failed or could not be run (see "error")
   2  usage error
   3  needs a decision: resolve found several/inexact matches, or run needs --yes
@@ -27,7 +27,7 @@ if sys.version_info < (3, 11):  # noqa: UP036 - friendly message instead of an I
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from linecore import runner  # noqa: E402
+from linecore import chatlist, runner  # noqa: E402
 from linecore.config import load_config_safe  # noqa: E402
 
 EXIT_OK, EXIT_FAIL, EXIT_USAGE, EXIT_DECIDE, EXIT_NOT_FOUND = 0, 1, 2, 3, 4
@@ -107,6 +107,26 @@ def resolve_name(
         results[source] = runner.run_line(argv, config=config, binary=binary)
 
     warnings: list[str] = []
+    fallback_rows: list[dict[str, Any]] | None = None
+    if not results["chats"].ok:
+        # `chats --search` names ALL chats (incl. inactive) in batches; one bad batch fails it.
+        listed, listing = chatlist.fetch_active_chats(config=config, binary=binary)
+        if listing.ok:
+            fallback_rows = chatlist.search_rows(listed, query)
+            results["chats"] = runner.LineResult(
+                ok=True,
+                exit_code=0,
+                data=[
+                    {
+                        "id": r["id"],
+                        "name": r["name"],
+                        "unread_count": r["unread"],
+                    }
+                    for r in fallback_rows
+                ],
+                command=results["chats"].command,
+            )
+            warnings.append(chatlist.FALLBACK_WARNING)
     failures = {s: r for s, r in results.items() if not r.ok}
     if len(failures) == len(results):
         first = next(iter(failures.values()))
@@ -162,7 +182,23 @@ def resolve_name(
             "name": only["name"],
             "type": only["type"],
         }
-        if failures:  # one search failed, so a second exact match may be hiding
+        if (
+            failures or fallback_rows is not None
+        ):  # one search failed, so a second exact match may be hiding
+            found["incomplete"] = True
+        return found, EXIT_OK
+    if not exact and len(candidates) == 1:
+        # a single substring hit: nothing to choose from, so do not make the user pick
+        only = candidates[0]
+        found = {
+            **base,
+            "status": "resolved",
+            "matched_by": "substring",
+            "id": only["id"],
+            "name": only["name"],
+            "type": only["type"],
+        }
+        if failures or fallback_rows is not None:
             found["incomplete"] = True
         return found, EXIT_OK
     if len(exact) > 1:
@@ -294,7 +330,11 @@ def main(argv: list[str] | None = None) -> int:
         runner.emit({"ok": False, "exit_code": None, "data": None, "error": problem})
         return EXIT_DECIDE if problem["kind"] == "confirmation_required" else EXIT_USAGE
 
-    stdin_text = sys.stdin.buffer.read().decode("utf-8", errors="replace") if args.stdin else None
+    # `send --stdin` reads its text from stdin; forward ours even when lineq's own flag was omitted
+    forward_stdin = args.stdin or ("--stdin" in line_args and not sys.stdin.isatty())
+    stdin_text = (
+        sys.stdin.buffer.read().decode("utf-8", errors="replace") if forward_stdin else None
+    )
     result = runner.run_line(
         line_args,
         stdin_text=stdin_text,

@@ -13,6 +13,7 @@ so match on the exit code first and treat text as a hint.
 - How to decide what to do after a failure
 - Lost response on a remote change (send, react, unsend)
 - Errors by category (selection, input, attachments, login and session, storage, watch, update)
+- Known upstream bugs (send e2ee version mismatch, `getContactsV2` batch failure)
 
 ## Exit codes
 
@@ -139,6 +140,8 @@ message list and inform the user. Do not resend the file as a new message until 
 | `LINE chat pagination returned an empty page before completion` | 1 | Read error. Retry once. |
 | `LINE returned an empty chat response` / `LINE returned no contact names` / `LINE returned an invalid contacts response` / `LINE returned inconsistent contact IDs` | 1 | Unexpected LINE response. Retry a read once, then report. |
 | `LINE returned no profile` | 1 | Same as above. |
+| `LINE request failed; check your connection and LINE account settings` from `chats --search` on an account with many chats | 1 | Upstream names ALL chats (inactive ones too) in batches and one failing batch fails the search, even when the network is fine. `lineq.py resolve` and `sync.py` fall back to `chats --limit 0 --show-ids` (active chats only; parsed by `linecore/chatlist.py`) and add the warning `searched active chats only (line chats --search failed upstream)`. Inactive chats are then only reachable by full ID. Do not retry the search. |
+| `contacts --mid` fails for group members (`LINE request failed`), `messages.md` shows truncated `U...` IDs | 1 | Non-friend group members cannot be looked up as contacts. `sync.py` then reads names from the text output of `messages CHAT --limit 100 --show-ids` (`linecore/msgtext.py`, once per sync) and caches them in `contacts.json`. Members who did not write in the latest 100 messages stay unnamed. |
 
 ### Attachments (download)
 
@@ -207,6 +210,37 @@ the matching code. Read `reason` in that object (see json-schema.md).
 | `The update was installed, but its durability could not be confirmed; run line version to check the installed version` | 1 (inferred, unverified) | Run `line version` before doing anything else. This error is not a `session` storage error, so `StorageReason` should classify it as `storage_error` (exit 1). |
 | `updated_unconfirmed` status in `--json` | 1 (inferred, unverified) | Same as above. |
 | Windows: `status` `update_available`, `can_self_update` false | 0 | The CLI does not replace itself on Windows. Give the user the printed PowerShell command to run after this exits. |
+
+## Known upstream bugs
+
+Confirmed live on line-cli v0.4.0 with a debug build. Decision: parked, no upstream issue or PR for
+now. Both hide their cause behind the generic `LINE request failed; check your connection and LINE
+account settings`, so a "connection" message here is usually not a connection problem.
+
+### `send` to some direct chats fails (e2ee version mismatch)
+
+- **Symptom:** `line send` to certain direct (1:1) chats fails with exit 1. LINE answers HTTP 400,
+  envelope code 10051, TalkException code 86 `sender or receiver not supported e2ee or version
+  mismatch`. The CLI shows only the generic message, prefixed `send did not return success; delivery
+  may have occurred; inspect history before retrying`. Nothing is delivered. The official LINE apps
+  can message the same person.
+- **Cause:** `negotiateE2EEPublicKey` returns a peer key with `e2eeVersion` 0 (the peer has no
+  Letter Sealing V2), while the CLI always encrypts as V2. Upstream does not fall back to another
+  version and does not surface the real error.
+- **What the skill does:** tell the user plainly that the message was NOT sent. Do not retry and do
+  not try other chats or formats. Suggest sending it from the LINE app. If unsure, read recent
+  messages (`messages CHAT --limit 20 --show-ids --json`, see "Lost response") to confirm nothing
+  went out. Reads from that chat are unaffected.
+
+### `getContactsV2` rejects the whole batch (`chats --search`, `contacts --mid`)
+
+- **Symptom:** `chats --search` or `contacts --mid` fails with the generic `LINE request failed`
+  although the network and login are fine.
+- **Cause:** for deleted accounts and non-friend group members LINE returns userStatus-only stubs
+  (no contact object). Upstream rejects the entire batch when one stub is present.
+- **What the skill does (already worked around):** `lineq.py resolve` and `sync.py` fall back to the
+  active-chat listing (`linecore/chatlist.py`, warning `searched active chats only`) and read group
+  sender names from the `messages` text output (`linecore/msgtext.py`). See "Reading and history".
 
 ## Quick reference: what not to retry
 

@@ -131,5 +131,10 @@ Ask Claude to "run the LINE doctor". It runs `setup.py --doctor` from the plugin
 | A message is marked "(possibly unsent)" | It vanished from LINE's latest 100 after it was archived, so it was probably unsent. The saved text is kept |
 | A photo or file is marked "expired" or "over 20 MiB" | LINE no longer has it, or it is above this client's limit, so it cannot be downloaded |
 | Archive warning about a git repository | Set `archive_root` (or `LINE_SKILL_ARCHIVE`) to a folder outside the repository |
+| Searching a chat name fails with "LINE request failed" | Upstream names every chat, including inactive ones, in one go and one failure stops it. Claude falls back to your active chats and says so; inactive chats are not found by name, use the full ID |
+| Group messages show truncated IDs instead of names | Non-friend group members cannot be looked up as contacts. Sync reads their names from the chat text instead and caches them; if a name is still missing, the person has not written inside the latest 100 messages |
+| Sending to one particular person always fails with "LINE request failed" | Upstream bug: LINE rejects the encryption version for some direct chats (error 10051 / 86, "e2ee or version mismatch"). Nothing was sent; Claude says so and does not retry. Send that message from the LINE app. Reading the chat still works |
+| `chats --search` or looking up group member names fails with "LINE request failed" | Upstream bug: one deleted account or non-friend member in the batch makes LINE's contact lookup fail. Already worked around (active chats only, names read from the chat text), see the two rows above |
+| Windows install fails with a `tar` error under Git Bash | Git's GNU tar cannot read `C:` paths. The installer now puts Windows' own System32 first on PATH for the install; if you install by hand, run it from PowerShell |
 
 [Back to the README](../README.md)

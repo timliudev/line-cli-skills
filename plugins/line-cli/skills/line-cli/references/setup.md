@@ -56,6 +56,9 @@ irm https://raw.githubusercontent.com/kongesque/line-cli/main/scripts/install-re
   `$env:LINE_CLI_INSTALL_DIR` if set (`install-release.ps1:9-10`).
 - Verifies the archive SHA-256 (`install-release.ps1:44`) and writes the `.line-cli-install` receipt
   (`install-release.ps1:63`).
+- Under Git Bash, PATH starts with Git's GNU `tar`, which reads `C:\...` as a remote host and makes
+  the installer's `tar.exe` call fail. `setup.py --install` therefore runs the installer with
+  `%SystemRoot%\System32` first on PATH (Windows' bsdtar). When installing by hand, use PowerShell.
 - Adds the directory to the user `PATH`. Reopen PowerShell if `line` is not found.
 - No extra keyring package is needed on Windows (`README.md:62`).
 - `line update` on Windows does not replace the binary. It prints a PowerShell command to run after
