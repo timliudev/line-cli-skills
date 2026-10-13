@@ -376,7 +376,7 @@ cmd = ["uv", "run", "~/asr/qwen3_svc.py", "--audio", "{audio}", "--lang", "{lang
 
 ### 上游 bug 紀錄（2026-10-13，實測於 line-cli v0.4.0 debug build；決議：暫緩，先不開 issue／PR）
 
-1. **`send` 到部分一對一聊天室失敗**：LINE 回 HTTP 400、envelope code 10051、TalkException code 86「sender or receiver not supported e2ee or version mismatch」。`negotiateE2EEPublicKey` 回的對方金鑰 `e2eeVersion` 為 0，但 CLI 一律用 V2 加密，上游沒有降版重試，真正原因還被包成泛用的「LINE request failed; check your connection and LINE account settings」（前綴 `send did not return success; delivery may have occurred…`）。訊息確實沒送出，官方 LINE 用戶端可以傳給同一個人。
+1. **`send` 到部分一對一聊天室失敗**（更正 2026-10-13：`send` 實測可正常送達，只有對方 Letter Sealing 金鑰為舊版的少數對象才失敗；以下為該失敗情境）：LINE 回 HTTP 400、envelope code 10051、TalkException code 86「sender or receiver not supported e2ee or version mismatch」。`negotiateE2EEPublicKey` 回的對方金鑰 `e2eeVersion` 為 0，但 CLI 一律用 V2 加密，上游沒有降版重試，真正原因還被包成泛用的「LINE request failed; check your connection and LINE account settings」（前綴 `send did not return success; delivery may have occurred…`）。訊息確實沒送出，官方 LINE 用戶端可以傳給同一個人。
    - skill 的處理：明白告訴使用者「沒有送出」，不重試，建議改用 LINE App 傳；要確認可用 `messages` 看最近訊息。已寫進 `references/errors.md`「Known upstream bugs」、SKILL.md、README／GUIDE 四語與 CHANGELOG（Known issues）。
 2. **`getContactsV2` 整批被拒**：LINE 對已刪除帳號、非好友群組成員只回 userStatus 殘件（沒有 contact 物件），上游遇到就整批失敗，造成 `chats --search`、`contacts --mid` 也報同一個泛用錯誤。skill 已繞過（`linecore/chatlist.py`、`linecore/msgtext.py`）。
 3. 若日後要回報上游：兩者都是「錯誤原因被吞掉」加「缺少降版或略過殘件的容錯」，可併成一個 issue。

@@ -2,7 +2,7 @@
 
 English | [繁體中文（台灣）](README.zh-TW.md) | [日本語](README.ja.md) | [ภาษาไทย](README.th.md)
 
-Claude Code skills for working with a **personal LINE account** and the media people send you. Status: **v0.1.0, first release (early software)** - reading and local sync/archive were tested live on Windows, media digestion on synthetic media; sending is blocked by an upstream bug. Details under [Status](#status).
+Claude Code skills for working with a **personal LINE account** and the media people send you. Status: **v0.1.1 (early software)** - reading, local sync/archive and sending a text message were tested live on Windows, media digestion on synthetic media; sending fails only for some peers with old Letter Sealing keys. Details under [Status](#status).
 
 <a id="disclaimer"></a>
 
@@ -53,14 +53,15 @@ See the [user guide](docs/GUIDE.md) for details, configuration and troubleshooti
 
 ## Status
 
-**v0.1.0 is the first release: early software.** How far each part has been tested:
+**v0.1.1 is early software.** How far each part has been tested:
 
 - **Tested live** (a real LINE account, **Windows only**): guided install, login, chat-name resolution, sync and archive, attachment downloads, group names.
 - **macOS and Linux:** unit tests only. These have not been tried on a real macOS or Linux machine yet.
-- **Sending has not been verified live and is blocked by an upstream bug.** `send` to some direct chats fails (LINE rejects the encryption version, TalkException 86). Nothing is delivered, Claude tells you the message was not sent, and you send it from the LINE app. Reacting and unsending are implemented (confirmed every time) but have not been tried live either.
+- **Sending works** (verified live on Windows with line-cli v0.4.0: a text message to a direct chat was delivered, end-to-end encrypted). It fails only for some peers whose Letter Sealing key is an old version (LINE rejects it with TalkException 86; upstream does not fall back). Then nothing is delivered, Claude tells you the message was not sent, and you send it from the LINE app. Replying (`--reply-to`) uses the same send path but was not separately verified live. Reacting and unsending are implemented (confirmed every time) but have not been tried live.
 - **media-digest:** keyframe extraction was tested on synthetic media made with ffmpeg, not on real recordings. The speech-to-text adapters (faster-whisper, whisper.cpp, OpenAI-compatible, custom command) have **not** been run against a real engine or service yet; their unit tests use fakes.
 - **Evals:** the 7 plugin evals ([docs/EVALS.md](docs/EVALS.md)) were run once each (3 runs per case) and all 7 passed. They check skill triggering and ask-before-writing behavior, not LINE itself.
 - **Known limit:** if upstream `chats --search` fails, name search covers active chats only (the user guide's troubleshooting table has this and two other fixes).
+- **Known limit:** @mentions are not supported (upstream has no mention support): "@name" is sent as plain text, not highlighted, and the person is not notified.
 
 See the [user guide](docs/GUIDE.md) and the [changelog](CHANGELOG.md).
 

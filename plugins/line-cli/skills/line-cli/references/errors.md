@@ -13,7 +13,7 @@ so match on the exit code first and treat text as a hint.
 - How to decide what to do after a failure
 - Lost response on a remote change (send, react, unsend)
 - Errors by category (selection, input, attachments, login and session, storage, watch, update)
-- Known upstream bugs (send e2ee version mismatch, `getContactsV2` batch failure)
+- Known upstream bugs (send e2ee version mismatch for some peers with old keys, `getContactsV2` batch failure)
 
 ## Exit codes
 
@@ -217,15 +217,19 @@ Confirmed live on line-cli v0.4.0 with a debug build. Decision: parked, no upstr
 now. Both hide their cause behind the generic `LINE request failed; check your connection and LINE
 account settings`, so a "connection" message here is usually not a connection problem.
 
-### `send` to some direct chats fails (e2ee version mismatch)
+### `send` to some peers with old Letter Sealing keys fails (e2ee version mismatch)
 
-- **Symptom:** `line send` to certain direct (1:1) chats fails with exit 1. LINE answers HTTP 400,
+Scope: `send` works in general (verified live 2026-10-13 on Windows, line-cli v0.4.0: a text message to
+a direct chat was delivered end-to-end encrypted, via `lineq.py run --yes -- send <id> --stdin --json`).
+`--reply-to` uses the same send path but was not separately verified live. Known limit: @mentions are not supported (no MENTION metadata upstream), so "@name" is sent as plain text with no highlight or notification. Only the case below fails.
+
+- **Symptom:** `line send` to certain direct (1:1) chats (peers with an old key version) fails with exit 1. LINE answers HTTP 400,
   envelope code 10051, TalkException code 86 `sender or receiver not supported e2ee or version
   mismatch`. The CLI shows only the generic message, prefixed `send did not return success; delivery
   may have occurred; inspect history before retrying`. Nothing is delivered. The official LINE apps
   can message the same person.
-- **Cause:** `negotiateE2EEPublicKey` returns a peer key with `e2eeVersion` 0 (the peer has no
-  Letter Sealing V2), while the CLI always encrypts as V2. Upstream does not fall back to another
+- **Cause:** `negotiateE2EEPublicKey` returns a peer key with `e2eeVersion` 0 (the peer's Letter Sealing
+  key is the old version, not V2), while the CLI always encrypts as V2. Upstream does not fall back to another
   version and does not surface the real error.
 - **What the skill does:** tell the user plainly that the message was NOT sent. Do not retry and do
   not try other chats or formats. Suggest sending it from the LINE app. If unsure, read recent

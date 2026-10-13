@@ -158,9 +158,40 @@ for real. Read [references/safety.md](references/safety.md) before the first wri
    first and tell the user what you find. Only try again after a new explicit yes
    ([references/errors.md](references/errors.md), "Lost response").
 
-Known upstream bug: `send` to some direct chats always fails (LINE rejects the encryption version,
-shown only as a generic "request failed"). Tell the user it was NOT sent, do not retry, and suggest
+Sending works (verified live: text to a direct chat, end-to-end encrypted). Known upstream limit: `send`
+fails for some peers whose Letter Sealing key is an old version (LINE rejects it, shown only as a
+generic "request failed"). Tell the user it was NOT sent, do not retry, and suggest
 sending from the LINE app ([references/errors.md](references/errors.md), "Known upstream bugs").
+
+### Replying to a specific message
+
+Users say things like "reply to Alice's last message with OK". `--reply-to` uses the same send path
+as plain `send` (not separately verified live).
+
+1. Sync the chat first (`sync.py`) so `messages.jsonl` is current.
+2. Find the target in `messages.jsonl` by sender name, quoted text, time, or "last message from X".
+   Any message type can be the target: text, photo, video, voice, file or sticker (`content_type`
+   in `messages.jsonl`; the archive records every message's id, stickers included, shown as
+   unsupported content). Identify it by type + sender + time, e.g. "the photo 阿明 sent at 01:28"
+   (`content_type`, sender, `created_time`). If several match or none do, ask the user; show
+   candidates with type, time, sender and first line.
+3. `--reply-to` only validates the ID format; it does not check the latest-100 window (that limit
+   applies to react/unsend/download). The target is looked up in the local archive, so older
+   archived messages can be targeted too. Whether LINE renders a quote for a very old target is
+   not verified; say so if the target is old.
+4. The confirmation must show the quoted original (time, sender, first line), the reply text and the
+   chat. Wait for an explicit yes.
+5. Then run once:
+   ```
+   python "${CLAUDE_SKILL_DIR}/scripts/lineq.py" run --yes -- send CHAT_ID --stdin --reply-to MESSAGE_ID --json <<'EOF'
+   reply text here
+   EOF
+   ```
+   A reply can itself be a file: `run --yes -- send CHAT_ID --file PATH --reply-to MESSAGE_ID --json`.
+
+**@mentions are not supported.** upstream line-cli has no MENTION metadata, so "@name" in the text
+is sent as plain text: not highlighted, and the person is not notified. If the user's text contains
+an @mention meant as a real mention, tell them plainly before sending and let them decide.
 
 Never use a write command to "test" something, and never loop over several chats without the user
 naming each one.

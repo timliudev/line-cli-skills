@@ -5,6 +5,22 @@ All notable changes to this project are documented here. Format based on
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-13
+
+### Changed
+- Docs: sending verified working (a text message to a direct chat was delivered end-to-end encrypted,
+  live on Windows with line-cli v0.4.0). The upstream TalkException 86 failure only affects some peers
+  with old Letter Sealing keys. Replying (`--reply-to`) shares the send path but was not verified
+  separately; reacting and unsending are still untried live.
+- SKILL.md: new "Replying to a specific message" flow (sync, find the target in the local archive,
+  confirmation shows the quoted original); example prompts added to the guide in all four languages.
+  Any message type can be the target (text, photo, video, voice, file, sticker) and a reply can itself
+  be a file (`send --file PATH --reply-to ID`). `--reply-to` does not check the latest-100 window (that
+  limit applies to react/unsend/download); whether LINE renders a quote for very old targets is not verified.
+- Known limit documented: @mentions are not supported (upstream has no MENTION metadata); "@name" is
+  sent as plain text, not highlighted, no notification.
+- Plugin versions bumped to 0.1.1.
+
 ## [0.1.0] - 2026-10-13
 
 First release. This is early software: the list below says exactly what has been tested and how.
