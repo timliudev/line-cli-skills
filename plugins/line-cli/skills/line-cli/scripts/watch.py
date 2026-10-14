@@ -69,6 +69,7 @@ EXIT_OK, EXIT_FAIL, EXIT_USAGE, EXIT_DECIDE = 0, 1, 2, 3
 BACKOFF_START = 2.0  # seconds before the first restart
 BACKOFF_CAP = 120.0  # restart delays never grow beyond this
 STABLE_AFTER = 60.0  # a run that lasted this long starts the backoff over
+DEFAULT_MAX_RESTARTS = 10  # consecutive fast failures before giving up (about 10 minutes)
 SETTLE = 15.0  # sync a chat once it has been quiet this long ...
 MAX_HOLD = 120.0  # ... or after waiting this long at most
 FOLDER_TTL = 5.0  # how long the set of archive folders is trusted before it is re-read
@@ -94,9 +95,6 @@ FATAL_KINDS = {
 
 _sleep = time.sleep  # indirection so tests can run without waiting
 
-_CHAT_ID = r"(?:[CUR][A-Za-z0-9_-]{43}|[cur][0-9a-f]{32})"
-_FOLDER_ID = re.compile(rf"(?:^|__)({_CHAT_ID})$")
-_OLD_FOLDER_ID = re.compile(rf"^({_CHAT_ID})__")
 _CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
@@ -178,9 +176,9 @@ def archived_chat_ids(root: Path) -> list[str]:
     for entry in entries:
         if not entry.is_dir() or entry.name.startswith("_"):
             continue
-        match = _FOLDER_ID.search(entry.name) or _OLD_FOLDER_ID.match(entry.name)
-        if match and match.group(1) not in found:
-            found.append(match.group(1))
+        parsed = store.parse_folder(entry.name)
+        if parsed and parsed[0] not in found:
+            found.append(parsed[0])
     return found
 
 
@@ -212,11 +210,34 @@ $appId = '{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershe
 """  # noqa: E501
 
 
+# The only environment variables PowerShell gets (matched case-insensitively): what it needs to
+# start on Windows. Anything else in the parent environment (API keys, tokens) is not passed.
+TOAST_ENV_KEYS = frozenset(
+    {
+        "SYSTEMROOT", "WINDIR", "SYSTEMDRIVE", "TEMP", "TMP", "USERPROFILE", "APPDATA",
+        "LOCALAPPDATA", "PATH", "PSMODULEPATH", "COMSPEC", "PATHEXT", "USERNAME", "USERDOMAIN",
+        "NUMBER_OF_PROCESSORS", "PROCESSOR_ARCHITECTURE", "OS", "PROGRAMFILES", "PROGRAMDATA",
+        "ALLUSERSPROFILE", "COMPUTERNAME", "HOMEDRIVE", "HOMEPATH", "SESSIONNAME",
+    }
+)  # fmt: skip
+
+
+def toast_env(title: str, body: str, parent: dict[str, str] | None = None) -> dict[str, str]:
+    """A minimal environment for the toast PowerShell, plus the two text variables."""
+    source = os.environ if parent is None else parent
+    env = {k: v for k, v in source.items() if k.upper() in TOAST_ENV_KEYS}
+    env["LINE_SKILL_TOAST_TITLE"] = title
+    env["LINE_SKILL_TOAST_BODY"] = body
+    return env
+
+
 def powershell_command() -> list[str]:
     """Windows PowerShell 5.1 (it can load the WinRT toast API) running the toast script."""
     exe = shutil.which("powershell") or "powershell"
     encoded = base64.b64encode(_TOAST_SCRIPT.encode("utf-16-le")).decode("ascii")
-    flags = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass"]
+    # -EncodedCommand runs a command, not a script file, so the execution policy does not apply
+    # and does not need to be bypassed.
+    flags = ["-NoProfile", "-NonInteractive"]
     return [exe, *flags, "-EncodedCommand", encoded]
 
 
@@ -252,7 +273,7 @@ class Notifier:
         return False
 
     def _toast(self, title: str, body: str) -> bool:
-        env = dict(os.environ, LINE_SKILL_TOAST_TITLE=title, LINE_SKILL_TOAST_BODY=body)
+        env = toast_env(title, body)
         kwargs: dict[str, Any] = {}
         if self.windows:
             kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -796,11 +817,16 @@ class WatchLoop:
         start: Callable[[], Any],
         *,
         duration: float | None = None,
-        max_restarts: int | None = None,
+        max_restarts: int | None = DEFAULT_MAX_RESTARTS,
     ) -> tuple[str, dict[str, Any] | None]:
-        """Run until stopped. Returns (reason, error): interrupted | duration | fatal | gave_up."""
+        """Run until stopped. Returns (reason, error): interrupted | duration | fatal | gave_up.
+
+        A healthy watcher runs forever. ``max_restarts`` counts CONSECUTIVE fast failures, so a
+        crash loop ends; a run that lasted ``STABLE_AFTER`` seconds resets the count.
+        """
         deadline = self.clock() + duration if duration else None
         backoff = BACKOFF_START
+        consecutive = 0
         try:
             while True:
                 outcome = self.run_process(start, deadline=deadline)
@@ -810,8 +836,11 @@ class WatchLoop:
                 error = {"kind": outcome.error_kind, "message": outcome.error_message}
                 if decision.fatal:
                     return "fatal", error
-                if max_restarts is not None and self.stats.restarts >= max_restarts:
+                if outcome.ran_for >= STABLE_AFTER:
+                    consecutive = 0
+                if max_restarts is not None and consecutive >= max_restarts:
                     return "gave_up", error
+                consecutive += 1
                 self.stats.restarts += 1
                 self.emit(
                     f"line watch exited (code {outcome.exit_code}"
@@ -940,7 +969,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--max-restarts",
         type=int,
         metavar="N",
-        help="give up after restarting `line watch` N times (default: keep trying)",
+        default=DEFAULT_MAX_RESTARTS,
+        help="give up after N consecutive fast failures of `line watch` (default "
+        f"{DEFAULT_MAX_RESTARTS}, about 10 minutes of crash loop); a run that lasted a minute "
+        "resets the count, so a healthy watcher runs forever. 0 = never restart",
     )
     parser.add_argument(
         "--log", metavar="FILE", help="append diagnostics to FILE (for pythonw / Task Scheduler)"
@@ -971,7 +1003,7 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_USAGE
     if args.duration is not None and args.duration <= 0:
         build_parser().error("--duration must be positive")
-    if args.settle < 0 or (args.max_restarts is not None and args.max_restarts < 0):
+    if args.settle < 0 or args.max_restarts < 0:
         build_parser().error("--settle and --max-restarts must not be negative")
 
     config, config_error = load_config_safe()

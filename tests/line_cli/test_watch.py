@@ -865,3 +865,89 @@ def test_resync_still_runs_full_syncs(archive_root):
 def att_msg(mid, minutes):
     item = msg(mid, minutes, "", ALICE, content_type=1, status="attachment")
     return item
+
+
+# ------------------------------------------------------------------ security follow-ups
+
+
+def test_powershell_command_does_not_bypass_the_execution_policy():
+    cmd = watch.powershell_command()
+    assert "-EncodedCommand" in cmd and "-NoProfile" in cmd and "-NonInteractive" in cmd
+    assert "-ExecutionPolicy" not in cmd and "Bypass" not in cmd
+
+
+def test_toast_powershell_gets_a_minimal_environment(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-secret")
+    monkeypatch.setenv("GITHUB_TOKEN", "ghp_test_secret")
+    monkeypatch.setenv("SystemRoot", r"C:\Windows")
+    monkeypatch.setenv("PATH", "/some/bin")
+    seen = []
+
+    def run(cmd, **kwargs):
+        seen.append(kwargs["env"])
+        return Completed(0)
+
+    assert watch.Notifier(windows=True, run=run, emit=lambda _m: None).notify("T", "B") is True
+    (env,) = seen
+    assert "ANTHROPIC_API_KEY" not in env and "GITHUB_TOKEN" not in env
+    assert not any("secret" in v for v in env.values())
+    assert env["LINE_SKILL_TOAST_TITLE"] == "T" and env["LINE_SKILL_TOAST_BODY"] == "B"
+    assert env.get("PATH") == "/some/bin"
+    assert {k.upper() for k in env} <= watch.TOAST_ENV_KEYS | {
+        "LINE_SKILL_TOAST_TITLE",
+        "LINE_SKILL_TOAST_BODY",
+    }
+    assert any(k.upper() == "SYSTEMROOT" for k in env)  # what PowerShell needs is still there
+
+
+def test_max_restarts_has_a_finite_default(archive_root, monkeypatch):
+    assert watch.build_parser().parse_args([]).max_restarts == watch.DEFAULT_MAX_RESTARTS == 10
+    assert "10" in watch.build_parser().format_help()
+    clock = Clock()
+    monkeypatch.setattr(watch, "_sleep", clock.sleep)
+    loop = make_loop(archive_root, clock=clock)
+    crash = [FakeProc([], "line: dial tcp: i/o timeout", 1) for _ in range(40)]
+    reason, error = loop.run(proc_factory(*crash))  # the default cap ends a crash loop
+    assert reason == "gave_up" and loop.stats.restarts == watch.DEFAULT_MAX_RESTARTS
+    assert error["kind"] == "network"
+
+
+class StableProc(FakeProc):
+    """A run that lasts longer than STABLE_AFTER before failing."""
+
+    def __init__(self, clock, **kw):
+        super().__init__(**kw)
+        self._clock = clock
+
+    def wait(self, timeout=None):
+        self._clock.now += watch.STABLE_AFTER + 1
+        return self.code
+
+
+def test_a_long_stable_run_resets_the_failure_count(archive_root, monkeypatch):
+    clock = Clock()
+    monkeypatch.setattr(watch, "_sleep", clock.sleep)
+    loop = make_loop(archive_root, clock=clock)
+    fail = "line: dial tcp: i/o timeout"
+    procs = [
+        FakeProc([], fail, 1),  # fast failure 1
+        StableProc(clock, stderr=fail, code=1),  # ran a long time: count starts over
+        FakeProc([], fail, 1),  # fast failure 1 again
+        FakeProc([], fail, 1),  # fast failure 2 -> gives up (max_restarts=2)
+        FakeProc([], fail, 1),
+    ]
+    start = proc_factory(*procs)
+    reason, _ = loop.run(start, max_restarts=2)
+    assert reason == "gave_up" and len(start.remaining) == 1  # four processes were started
+    assert loop.stats.restarts == 3
+
+
+def test_archived_chat_ids_ignores_a_chat_named_like_another_chats_id(archive_root):
+    (archive_root / f"Family__{CHAT}").mkdir(parents=True)
+    own = "R" + "Z" * 43
+    (archive_root / store.folder_name(own, CHAT)).mkdir()  # "<CHAT>__<own>": name = CHAT's ID
+    assert sorted(watch.archived_chat_ids(archive_root)) == sorted([CHAT, own])
+    loop = make_loop(archive_root, archive_all=False)
+    assert loop.archives(CHAT) and loop.archives(own)
+    gone = "C" + "Y" * 43
+    assert not loop.archives(gone)

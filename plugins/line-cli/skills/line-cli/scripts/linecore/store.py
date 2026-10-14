@@ -67,29 +67,55 @@ def folder_name(chat_id: str, chat_name: str | None) -> str:
     return f"{name}__{base}" if name else base
 
 
-def find_chat_dirs(archive_root: Path, chat_id: str) -> list[Path]:
-    """Every folder of ``chat_id``: ``<name>__<id>``, bare ``<id>`` and the old ``<id>__<name>``."""
+_CHAT_ID = r"(?:[CUR][A-Za-z0-9_-]{43}|[cur][0-9a-f]{32})"  # a full LINE chat ID
+_CURRENT_LAYOUT = re.compile(rf"(?:^|__)({_CHAT_ID})$")  # "<name>__<id>" or the bare "<id>"
+_OLD_LAYOUT = re.compile(rf"^({_CHAT_ID})__(.*)$", re.S)  # "<id>__<name>" (older versions)
+
+
+def parse_folder(folder_name: str) -> tuple[str, str | None] | None:
+    """``(chat_id, label)`` of an archive folder name, or None when it is not a chat folder.
+
+    The chat ID is one exact, full-length segment, never a prefix or suffix of something else:
+    ``<name>__<id>`` (current; the ID is the LAST segment), the bare ``<id>``, and the old
+    ``<id>__<name>``. The current layout wins, so a chat whose *name* looks like another chat's ID
+    (``<other id>__<own id>``) belongs to its own ID only.
+    """
+    match = _CURRENT_LAYOUT.search(folder_name)
+    if match:
+        label = folder_name[: match.start()]
+        return match.group(1), (label or None)
+    match = _OLD_LAYOUT.match(folder_name)
+    if match:
+        return match.group(1), (match.group(2) or None)
+    return None
+
+
+def _belongs_to(folder_name: str, chat_id: str) -> bool:
+    parsed = parse_folder(folder_name)
+    if parsed is not None:
+        return parsed[0] == safe_id(chat_id)
+    # not a full-length ID (never produced by LINE): only the exact current / bare layouts
     base = safe_id(chat_id)
+    return folder_name == base or folder_name.endswith("__" + base)
+
+
+def find_chat_dirs(archive_root: Path, chat_id: str) -> list[Path]:
+    """Every folder of ``chat_id``: ``<name>__<id>``, bare ``<id>`` and the old ``<id>__<name>``.
+
+    The ID must match as a whole segment (see ``parse_folder``), so one chat's folder is never
+    taken for another's, whatever the chat names look like.
+    """
     try:
         entries = sorted(archive_root.iterdir())
     except OSError:
         return []
-    return [
-        entry
-        for entry in entries
-        if entry.is_dir()
-        and (
-            entry.name == base
-            or entry.name.endswith("__" + base)
-            or entry.name.startswith(base + "__")
-        )
-    ]
+    return [e for e in entries if e.is_dir() and _belongs_to(e.name, chat_id)]
 
 
 def _layout_rank(path: Path, base: str) -> int:
-    if path.name.endswith("__" + base):
-        return 0
-    return 1 if path.name == base else 2
+    if path.name == base:
+        return 1
+    return 0 if path.name.endswith("__" + base) else 2
 
 
 def find_chat_dir(archive_root: Path, chat_id: str) -> Path | None:
@@ -105,11 +131,12 @@ def find_chat_dir(archive_root: Path, chat_id: str) -> Path | None:
 
 def folder_label(path: Path, chat_id: str) -> str | None:
     """The name part of the folder (None when the folder is the bare ID)."""
+    parsed = parse_folder(path.name)
+    if parsed is not None:
+        return parsed[1] if parsed[0] == safe_id(chat_id) else None
     base = safe_id(chat_id)
     if path.name.endswith("__" + base):
         return path.name[: -len(base) - 2] or None
-    if path.name.startswith(base + "__"):  # old layout
-        return path.name[len(base) + 2 :] or None
     return None
 
 

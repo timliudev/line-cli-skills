@@ -61,8 +61,9 @@ sync.py --all [same options]
 - Folder names are made safe for Windows: reserved characters and names are replaced, and the chat
   name part is capped at 60 characters (the chat ID is never shortened). When the name is unknown
   the folder is just `<chat_id>`.
-- Folders are found by chat ID: the current `<name>__<chat_id>`, a bare `<chat_id>`, and the older
-  `<chat_id>__<name>` layout all match, and the next sync renames them to the current layout
+- Folders are found by chat ID, matched as one whole segment (never a prefix or suffix, so a chat
+  whose name looks like another chat's ID cannot be mistaken for it): the current
+  `<name>__<chat_id>`, a bare `<chat_id>`, and the older `<chat_id>__<name>` layout all match, and the next sync renames them to the current layout
   (contents untouched). When no name is given and none is stored, a sync looks the name up
   (direct chats via contacts, groups and rooms via `chats --limit 0 --show-ids`, one call per
   run); if that fails the folder stays id-only, silently.

@@ -330,7 +330,8 @@ unless the user asked for exactly that; tell them plainly what it stores. If the
 archived chat is deleted while it runs, the chat is no longer archived (it is not recreated)
 unless it is on the allowlist.
 
-If `line watch` exits it restarts with growing pauses (2 s up to 2 min). It stops by itself, with a clear error, when another `line watch` is running (exit `3`),
+If `line watch` exits it restarts with growing pauses (2 s up to 2 min), and gives up after 10
+consecutive fast failures (`--max-restarts`; a run that lasted a minute resets the count). It stops by itself, with a clear error, when another `line watch` is running (exit `3`),
 the login is gone or `line` is missing (exit `1`). Only ONE `line watch` can run at a time, so do
 not start it while another watcher runs.
 

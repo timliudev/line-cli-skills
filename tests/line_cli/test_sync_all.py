@@ -283,3 +283,63 @@ def test_sync_merges_duplicates_and_stops_warning(fake_line, archive_root, capsy
     assert [p.name for p in archive_root.iterdir() if p.is_dir()] == [f"Family__{GID}"]
     folder = archive_root / f"Family__{GID}"
     assert "**Alice**: two" in (folder / "messages.md").read_text(encoding="utf-8")
+
+
+# ------------------------------------------------------------------ folder matching is by whole ID
+
+
+OWN = "C" + "Q" * 43  # an unrelated chat whose NAME is chosen to look like GID
+
+
+def test_parse_folder_reads_the_three_layouts_and_rejects_the_rest():
+    assert store.parse_folder(f"New Name__{GID}") == (GID, "New Name")
+    assert store.parse_folder(GID) == (GID, None)
+    assert store.parse_folder(f"{GID}__Old Name") == (GID, "Old Name")
+    assert store.parse_folder("_line_emoji") is None
+    assert store.parse_folder("notes") is None
+    assert store.parse_folder(f"{GID}X") is None  # not a whole ID
+    assert store.parse_folder(f"X{GID}") is None
+
+
+def test_a_chat_named_like_another_chats_id_never_matches_that_chat(tmp_path):
+    attacker = tmp_path / store.folder_name(OWN, GID)  # "<GID>__<OWN>": name = the victim's ID
+    attacker.mkdir()
+    (attacker / "messages.jsonl").write_text('{"id":"1"}\n', encoding="utf-8")
+    assert store.parse_folder(attacker.name) == (OWN, GID)  # the LAST segment is the chat ID
+    assert store.find_chat_dirs(tmp_path, GID) == []
+    assert store.find_chat_dir(tmp_path, GID) is None
+    assert store.find_chat_dir(tmp_path, OWN) == attacker
+    assert store.folder_label(attacker, GID) is None
+    assert store.folder_label(attacker, OWN) == GID
+
+    # a name that merely ENDS with the victim's ID is no better
+    sneaky = tmp_path / store.folder_name("C" + "R" * 43, f"x__{GID}")
+    sneaky.mkdir()
+    assert store.find_chat_dirs(tmp_path, GID) == []
+    assert store.find_chat_dir(tmp_path, "C" + "R" * 43) == sneaky
+
+
+def test_merge_never_folds_another_chats_folder_into_the_victim(tmp_path):
+    victim = tmp_path / f"Victim__{GID}"
+    victim.mkdir()
+    (victim / "messages.jsonl").write_text('{"id":"v1","created_time":1}\n', encoding="utf-8")
+    attacker = tmp_path / store.folder_name(OWN, GID)
+    attacker.mkdir()
+    (attacker / "messages.jsonl").write_text('{"id":"a1","created_time":2}\n', encoding="utf-8")
+
+    kept, warnings = store.merge_chat_dirs(tmp_path, GID)
+    assert kept == victim and warnings == []
+    assert attacker.is_dir() and (attacker / "messages.jsonl").is_file()  # untouched, not deleted
+    assert [r["id"] for r in store.read_jsonl(victim / "messages.jsonl")[0]] == ["v1"]
+    # and the other way round: syncing the attacker chat leaves the victim alone
+    kept, _ = store.merge_chat_dirs(tmp_path, OWN)
+    assert kept == attacker and victim.is_dir()
+
+
+def test_non_standard_ids_only_match_exactly(tmp_path):
+    (tmp_path / "Name__abc").mkdir()
+    (tmp_path / "abc__Old").mkdir()
+    (tmp_path / "xabc").mkdir()
+    (tmp_path / "abc").mkdir()
+    found = sorted(p.name for p in store.find_chat_dirs(tmp_path, "abc"))
+    assert found == ["Name__abc", "abc"]  # no prefix match, no partial-ID match

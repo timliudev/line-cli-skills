@@ -99,7 +99,9 @@ How it works:
 4. If `line watch` exits, it is started again after 2 s, then 4, 8 ... up to 120 s; a run that
    lasted a minute starts the backoff over. It does **not** restart for: another `line watch`
    already running (exit `3`, "only one watcher at a time"), a lost login (`not_logged_in`),
-   missing `line`, or a storage problem (exit `1`). `--max-restarts N` gives up after N restarts.
+   missing `line`, or a storage problem (exit `1`). `--max-restarts N` (default 10) gives up after N CONSECUTIVE fast failures, about 10 minutes
+   of crash loop; a run that lasted a minute resets the count, so a healthy watcher runs forever
+   (`0` = never restart). The summary then says `gave_up`.
 5. Ctrl-C (or SIGTERM, or `--duration`) stops `line watch`, saves the chats still waiting for a
    sync and prints one JSON summary: `stopped` (`interrupted`, `duration`, `fatal`, `gave_up`),
    `error`, and counters (`events`, `messages_archived`, `duplicate_messages`, `resync_events`,
@@ -164,8 +166,11 @@ de-duplicated). Title: the chat name. Body: `Sender: first 80 characters`, or `[
 `[Audio]`, `[File]` for attachments.
 
 - **Windows**: a toast through Windows PowerShell 5.1 and the WinRT `ToastNotificationManager`
-  (stdlib only; the toast is attributed to PowerShell). The text travels in environment variables
-  and is XML-escaped inside the script, so message content never becomes code.
+  (stdlib only; the toast is attributed to PowerShell). The script runs as an encoded command, so
+  no execution-policy bypass is used, and PowerShell gets only a minimal environment (system
+  paths, user profile folders and the two text variables), never API keys or tokens from the
+  parent. The text travels in those variables and is XML-escaped inside the script, so message
+  content never becomes code.
 - **Elsewhere, or if the toast fails** (no `powershell`, notifications blocked, Focus Assist does
   not fail the call but may hide the toast): one line `[VIP] new message in <chat> from <sender>` on stderr (or the log file). The log never
   contains the preview or any message text; only the toast shows it.

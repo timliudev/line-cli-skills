@@ -24,7 +24,9 @@ All notable changes to this project are documented here. Format based on
   `resync_required` (catch-up). **Privacy default:** only chats that already have an archive folder,
   or are listed under `[watch] archive_chats` / passed with `--archive NAME_OR_ID`, are archived;
   events of every other chat are ignored (nothing written, nothing logged, counted as
-  `ignored_messages`). `--archive-all` is an explicit opt-in that archives every chat.
+  `ignored_messages`). `--archive-all` is an explicit opt-in that archives every chat. `--max-restarts` defaults to 10
+  consecutive fast failures (a run that lasted a minute resets the count), so a crash loop ends
+  while a healthy watcher runs forever.
   **No `line` call for plain text:** a new message is appended from the event and the chat's
   `messages.md` is re-rendered from the local files (names cache, downloaded files, emoji cache), so
   LINE's session lock stays free for `send`. The full sync runs only for an attachment to download,
@@ -40,7 +42,8 @@ All notable changes to this project are documented here. Format based on
   archived, and nothing is written to disk for them then. A fresh incoming message (not sent by you, not older than
   15 minutes) in a VIP chat shows a Windows toast (PowerShell, stdlib only) with chat, sender and a
   short preview; other systems, or a failed toast, get one stderr line with the chat and sender but
-  never the message text. `--no-notify` disables it. VIP and archive entries must be exact names
+  never the message text. The toast PowerShell runs without an execution-policy bypass and with a
+  minimal environment (no API keys or tokens from the parent). `--no-notify` disables it. VIP and archive entries must be exact names
   or full IDs (a partial-name match is refused with a warning).
 - `references/watch.md`: broadcast and watch in detail, running `watch.py` on Windows with `pythonw`
   or Task Scheduler at logon, a scheduled `sync.py --all` fallback with `schtasks` (commands
@@ -50,6 +53,9 @@ All notable changes to this project are documented here. Format based on
 
 ### Changed
 - Docs: clarify that `/plugin` commands run inside Claude Code; add terminal alternative (`claude plugin ...`).
+- Archive folders are matched to a chat by the whole chat-ID segment (`<name>__<id>`, bare `<id>`,
+  old `<id>__<name>`), never by prefix or suffix: a chat whose name looks like another chat's ID can
+  no longer be mistaken for that chat or merged into its archive.
 - `sync.py` summary: new `gap` field (`null`, or `after_id`, `before_id`, `from`, `to` as UTC times)
   next to `gap_possible`. The warning now names the unrecoverable time range and the fix (sync more
   often or run `watch.py`). Additive; `state.json` is unchanged.
