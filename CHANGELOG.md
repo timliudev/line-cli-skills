@@ -49,6 +49,7 @@ All notable changes to this project are documented here. Format based on
   after they confirm (also in SKILL.md and `references/safety.md`).
 
 ### Changed
+- Docs: clarify that `/plugin` commands run inside Claude Code; add terminal alternative (`claude plugin ...`).
 - `sync.py` summary: new `gap` field (`null`, or `after_id`, `before_id`, `from`, `to` as UTC times)
   next to `gap_possible`. The warning now names the unrecoverable time range and the fix (sync more
   often or run `watch.py`). Additive; `state.json` is unchanged.

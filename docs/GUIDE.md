@@ -12,11 +12,25 @@ You mostly just talk to Claude Code in your own language. This guide explains wh
 
 Add the marketplace and install the plugins:
 
-```
+**Option A (recommended): inside Claude Code.** Open Claude Code (the terminal app, or the Code tab of the Claude desktop app) and type these into its chat box, one line at a time, pressing Enter after each:
+
+```text
 /plugin marketplace add timliudev/line-cli-skills
 /plugin install line-cli@line-cli-skills
 /plugin install media-digest@line-cli-skills
 ```
+
+Then start a new Claude Code session so the plugins load.
+
+**Option B: from a terminal.** If the `claude` command is installed, open PowerShell, Terminal or bash and run:
+
+```bash
+claude plugin marketplace add timliudev/line-cli-skills
+claude plugin install line-cli@line-cli-skills
+claude plugin install media-digest@line-cli-skills
+```
+
+**Important:** lines that start with `/` are **not** terminal commands. Typing them into PowerShell, Terminal or bash gives "'/plugin' is not recognized". They only work inside Claude Code. In a terminal, use the `claude plugin ...` form of Option B.
 
 - `line-cli` is for LINE. `media-digest` is optional and works on any video or audio file; install it if you want Claude to understand LINE videos and voice messages.
 - You need Python 3.11 or newer. If `python` is not found on your system, Claude tries `python3` or `py -3`.
@@ -67,6 +81,7 @@ What `media-digest` needs, offered with your consent and a stated download size:
 
 | Need | For | How |
 | --- | --- | --- |
+| "'/plugin' is not recognized" (or "command not found") in PowerShell/Terminal | `/plugin ...` is a Claude Code command, not a terminal command. Type it in the Claude Code chat box, or use `claude plugin marketplace add ...` / `claude plugin install ...` in a terminal (see Install) |
 | ffmpeg | video frames, audio handling | `winget install --id Gyan.FFmpeg -e` (Windows), `brew install ffmpeg` (macOS), `sudo apt install ffmpeg` (Linux, you run it) |
 | uv | the default local transcriber | winget, brew or the official installer |
 | A speech-to-text engine | transcripts | local `faster-whisper` by default (installs itself on first use; model about 1.6 GB, downloaded once); alternatives below |
@@ -78,7 +93,7 @@ Claude runs `digest.py FILE... --out OUTDIR` from the plugin's `skills/media-dig
 ## Broadcast, live archive and notifications
 
 - **Send one message to several chats.** Ask, for example, "Send this announcement to everyone on my list." Claude writes the list, does a **dry run** (every name is resolved, nothing is sent) and shows you every recipient and the exact text. Only an exact name or a full ID counts; partial or ambiguous names are put to you, never guessed, and when LINE's name search cannot be fully checked Claude asks for the full chat ID instead. After your explicit yes it sends one by one, with a pause of a few seconds in between. It stops at the first failure, never retries, and tells you who got the message, who failed and who was not attempted. A failed broadcast is never repeated automatically (people who already got it would get it twice); Claude offers to send to the rest only if you say so. Messaging many chats at once can get an account restricted, so keep lists short.
-- **Live archive.** `watch.py` keeps the archive current in the background: it listens for new messages, saves them as they arrive (attachments follow a few seconds later), catches up when LINE reports missed events, and restarts itself when the connection drops. Only one `line watch` can run at a time; if another is running, `watch.py` says so and stops. Ctrl-C stops it cleanly. On Windows run it with `pythonw` or let Task Scheduler start it at logon; the commands are in the skill's `references/watch.md`, and Claude shows them to you but never creates the task itself. By default it archives only chats that already have an archive folder, or that you list under `[watch] archive_chats` (or pass with `--archive`); messages of every other chat, such as private chats you never synced, are ignored and nothing about them is stored or logged. `--archive-all` stores everything and stays off unless you ask for it. Plain text messages are saved without contacting LINE at all, so your sends are not affected; only while it does a full sync (at start, after a resync, for attachments or unknown names) can a send be refused with "another line command is using the session": the message was **not** sent; wait a moment and Claude sends it again once you confirm.
+- **Live archive.** `watch.py` keeps the archive current in the background: it listens for new messages, saves them as they arrive (attachments follow a few seconds later), catches up when LINE reports missed events, and restarts itself when the connection drops (it gives up after 10 quick failures in a row, so a crash loop ends). Only one `line watch` can run at a time; if another is running, `watch.py` says so and stops. Ctrl-C stops it cleanly. On Windows run it with `pythonw` or let Task Scheduler start it at logon; the commands are in the skill's `references/watch.md`, and Claude shows them to you but never creates the task itself. By default it archives only chats that already have an archive folder, or that you list under `[watch] archive_chats` (or pass with `--archive`); messages of every other chat, such as private chats you never synced, are ignored and nothing about them is stored or logged. `--archive-all` stores everything and stays off unless you ask for it. Plain text messages are saved without contacting LINE at all, so your sends are not affected; only while it does a full sync (at start, after a resync, for attachments or unknown names) can a send be refused with "another line command is using the session": the message was **not** sent; wait a moment and Claude sends it again once you confirm.
 - **Gaps.** LINE only returns the latest 100 messages and the client cannot page back, so if more than 100 arrive between two syncs, the ones in between are lost for good. A sync now tells you the time range (`gap`). Avoid it by syncing more often or running `watch.py`. Fallback without a permanent process: a Windows Task Scheduler job that runs `sync.py --all` every 15 minutes (`schtasks` command in `references/watch.md`).
 - **VIP notifications.** List important chats under `[watch] vip_chats` in `config.toml` (names or full chat IDs) or pass `--vip` to `watch.py`. While it runs, a new incoming message in such a chat shows a Windows notification with the chat, the sender and a short preview (other systems, or a failed toast, get a log line with the chat and sender but never the message text). Your own messages and old backlog do not trigger it. A VIP chat that is not archived still notifies, and nothing is written to disk for it. The preview puts chat text on your screen.
 

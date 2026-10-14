@@ -39,11 +39,25 @@
 
 ## 安裝
 
-```
+**方式 A（建議）：在 Claude Code 裡面輸入。** 開啟 Claude Code（終端機版，或 Claude 桌面版的 Code 分頁），在它的對話框一行一行輸入，每行按 Enter：
+
+```text
 /plugin marketplace add timliudev/line-cli-skills
 /plugin install line-cli@line-cli-skills
 /plugin install media-digest@line-cli-skills
 ```
+
+接著開一個新的 Claude Code 對話，外掛才會載入。
+
+**方式 B：從終端機輸入。** 已安裝 `claude` 指令的話，開啟 PowerShell、Terminal 或 bash 執行：
+
+```bash
+claude plugin marketplace add timliudev/line-cli-skills
+claude plugin install line-cli@line-cli-skills
+claude plugin install media-digest@line-cli-skills
+```
+
+**注意：** 以 `/` 開頭的行**不是**終端機指令。貼到 PowerShell、Terminal 或 bash 會出現「'/plugin' is not recognized」。它們只能在 Claude Code 裡面用；在終端機請用方式 B 的 `claude plugin ...`。
 
 ### 快速上手
 

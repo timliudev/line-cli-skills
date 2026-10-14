@@ -39,11 +39,25 @@
 
 ## インストール
 
-```
+**方法 A（推奨）：Claude Code の中で入力する。** Claude Code（ターミナル版、または Claude デスクトップアプリの Code タブ）を開き、チャット欄に 1 行ずつ入力して Enter を押します。
+
+```text
 /plugin marketplace add timliudev/line-cli-skills
 /plugin install line-cli@line-cli-skills
 /plugin install media-digest@line-cli-skills
 ```
+
+その後、新しい Claude Code セッションを開始するとプラグインが読み込まれます。
+
+**方法 B：ターミナルから。** `claude` コマンドがインストール済みなら、PowerShell・Terminal・bash を開いて実行します。
+
+```bash
+claude plugin marketplace add timliudev/line-cli-skills
+claude plugin install line-cli@line-cli-skills
+claude plugin install media-digest@line-cli-skills
+```
+
+**重要：** `/` で始まる行はターミナルのコマンドでは**ありません**。PowerShell・Terminal・bash に入力すると「'/plugin' is not recognized」と表示されます。Claude Code の中でのみ動作します。ターミナルでは方法 B の `claude plugin ...` を使ってください。
 
 ### クイックスタート
 

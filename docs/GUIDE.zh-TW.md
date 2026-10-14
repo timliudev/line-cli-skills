@@ -12,11 +12,25 @@
 
 加入 marketplace 並安裝 plugin：
 
-```
+**方式 A（建議）：在 Claude Code 裡面輸入。** 開啟 Claude Code（終端機版，或 Claude 桌面版的 Code 分頁），在它的對話框一行一行輸入，每行按 Enter：
+
+```text
 /plugin marketplace add timliudev/line-cli-skills
 /plugin install line-cli@line-cli-skills
 /plugin install media-digest@line-cli-skills
 ```
+
+接著開一個新的 Claude Code 對話，外掛才會載入。
+
+**方式 B：從終端機輸入。** 已安裝 `claude` 指令的話，開啟 PowerShell、Terminal 或 bash 執行：
+
+```bash
+claude plugin marketplace add timliudev/line-cli-skills
+claude plugin install line-cli@line-cli-skills
+claude plugin install media-digest@line-cli-skills
+```
+
+**注意：** 以 `/` 開頭的行**不是**終端機指令。貼到 PowerShell、Terminal 或 bash 會出現「'/plugin' is not recognized」。它們只能在 Claude Code 裡面用；在終端機請用方式 B 的 `claude plugin ...`。
 
 - `line-cli` 用於 LINE。`media-digest` 為選用，可處理任何影片或音訊檔案；若希望 Claude 理解 LINE 的影片與語音訊息，請安裝它。
 - 需要 Python 3.11 或更新版本。若系統找不到 `python`，Claude 會改試 `python3` 或 `py -3`。
@@ -67,6 +81,7 @@
 
 | 需求 | 用途 | 安裝方式 |
 | --- | --- | --- |
+| 在 PowerShell／Terminal 出現「'/plugin' is not recognized」（或 command not found） | `/plugin ...` 是 Claude Code 的指令，不是終端機指令。請在 Claude Code 的對話框輸入，或在終端機改用 `claude plugin marketplace add ...`／`claude plugin install ...`（見「Install」安裝章節） |
 | ffmpeg | 影片影格、音訊處理 | `winget install --id Gyan.FFmpeg -e`（Windows）、`brew install ffmpeg`（macOS）、`sudo apt install ffmpeg`（Linux，由你自己執行） |
 | uv | 預設的本機轉寫工具 | winget、brew 或官方安裝程式 |
 | 語音轉文字引擎 | 逐字稿 | 預設為本機 `faster-whisper`（首次使用時自行安裝；模型約 1.6 GB，只下載一次）；其他替代方案見下 |
@@ -78,7 +93,7 @@ Claude 會替你從 plugin 的 `skills/media-digest/scripts` 資料夾執行 `di
 ## 群發、即時存檔與通知
 
 - **一次傳給多個聊天室。** 例如說「把這則公告傳給名單上的每個人」。Claude 會寫出名單並先**試跑**（逐一解析名稱、不會送出任何東西），把每個收件人和完整文字給你看。只有「名稱完全相符」或完整 ID 才算數；部分相符或有多個同名者會交給你決定，絕不猜；LINE 的名稱搜尋無法完整確認時，Claude 會改要求完整聊天室 ID。你明確說「好」之後才逐一送出，每則之間停幾秒。遇到第一個失敗就停、絕不重試，並告訴你誰收到了、誰失敗了、誰還沒送。失敗的群發不會自動重跑（已收到的人會收到第二次）；只有你開口，Claude 才會對其餘的人再送。一次傳給很多聊天室可能讓帳號被限制，名單請保持精簡。
-- **即時存檔。** `watch.py` 在背景讓存檔保持最新：監聽新訊息、一到就存（附件幾秒後跟上）、LINE 回報漏掉事件時補同步、連線中斷時自動重啟。同一時間只能有一個 `line watch`；若已有別的在跑，`watch.py` 會直接說明並停止。按 Ctrl-C 可乾淨結束。在 Windows 上可用 `pythonw` 執行，或交給「工作排程器」在登入時啟動；指令寫在 skill 的 `references/watch.md`，Claude 只會把指令給你看，不會自己建立排程。預設只存檔「已有存檔資料夾」的聊天室，或你在 `[watch] archive_chats` 列出（或用 `--archive` 指定）的聊天室；其他聊天室（例如你從未同步過的私人聊天）的訊息會被忽略，不儲存也不寫入紀錄。`--archive-all` 會存下所有聊天室，預設關閉，除非你明確要求。純文字訊息會直接存檔、完全不聯絡 LINE，所以不影響你傳訊；只有在 `watch.py` 做完整同步時（啟動、補同步、下載附件或查詢不明名稱），傳送才可能被拒絕並顯示「another line command is using the session」：這表示訊息**沒有**送出；稍等片刻，經你確認後 Claude 才會再送一次。
+- **即時存檔。** `watch.py` 在背景讓存檔保持最新：監聽新訊息、一到就存（附件幾秒後跟上）、LINE 回報漏掉事件時補同步、連線中斷時自動重啟（連續快速失敗 10 次就會放棄，避免無限當機循環）。同一時間只能有一個 `line watch`；若已有別的在跑，`watch.py` 會直接說明並停止。按 Ctrl-C 可乾淨結束。在 Windows 上可用 `pythonw` 執行，或交給「工作排程器」在登入時啟動；指令寫在 skill 的 `references/watch.md`，Claude 只會把指令給你看，不會自己建立排程。預設只存檔「已有存檔資料夾」的聊天室，或你在 `[watch] archive_chats` 列出（或用 `--archive` 指定）的聊天室；其他聊天室（例如你從未同步過的私人聊天）的訊息會被忽略，不儲存也不寫入紀錄。`--archive-all` 會存下所有聊天室，預設關閉，除非你明確要求。純文字訊息會直接存檔、完全不聯絡 LINE，所以不影響你傳訊；只有在 `watch.py` 做完整同步時（啟動、補同步、下載附件或查詢不明名稱），傳送才可能被拒絕並顯示「another line command is using the session」：這表示訊息**沒有**送出；稍等片刻，經你確認後 Claude 才會再送一次。
 - **缺口（gap）。** LINE 只回傳最新 100 則訊息，這個客戶端也無法往前翻頁，所以兩次同步之間若來了超過 100 則，中間那些就永遠找不回來。同步現在會告訴你缺口的時間範圍（`gap`）。避免的方法是更常同步，或執行 `watch.py`。不想常駐程式時的替代方案：用 Windows 工作排程器每 15 分鐘執行一次 `sync.py --all`（`schtasks` 指令見 `references/watch.md`）。
 - **VIP 通知。** 在 `config.toml` 的 `[watch] vip_chats` 列出重要聊天室（名稱或完整聊天室 ID），或對 `watch.py` 加 `--vip`。執行期間，這些聊天室的新來訊息會跳出 Windows 通知，內容有聊天室、寄件人和一小段預覽（其他系統或通知失敗時改寫一行紀錄，內容只有聊天室與寄件人，絕不含訊息文字）。你自己傳的訊息和過舊的積壓訊息不會觸發。未存檔的 VIP 聊天室仍會通知，但不會在磁碟寫入任何東西。預覽會把聊天內容顯示在螢幕上。
 

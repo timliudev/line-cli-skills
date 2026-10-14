@@ -39,11 +39,25 @@ Two independent Claude Code plugins:
 
 ## Install
 
-```
+**Option A (recommended): inside Claude Code.** Open Claude Code (the terminal app, or the Code tab of the Claude desktop app) and type these into its chat box, one line at a time, pressing Enter after each:
+
+```text
 /plugin marketplace add timliudev/line-cli-skills
 /plugin install line-cli@line-cli-skills
 /plugin install media-digest@line-cli-skills
 ```
+
+Then start a new Claude Code session so the plugins load.
+
+**Option B: from a terminal.** If the `claude` command is installed, open PowerShell, Terminal or bash and run:
+
+```bash
+claude plugin marketplace add timliudev/line-cli-skills
+claude plugin install line-cli@line-cli-skills
+claude plugin install media-digest@line-cli-skills
+```
+
+**Important:** lines that start with `/` are **not** terminal commands. Typing them into PowerShell, Terminal or bash gives "'/plugin' is not recognized". They only work inside Claude Code. In a terminal, use the `claude plugin ...` form of Option B.
 
 ### Quick start
 

@@ -39,11 +39,25 @@
 
 ## ติดตั้ง
 
-```
+**วิธี A (แนะนำ): พิมพ์ภายใน Claude Code** เปิด Claude Code (แบบเทอร์มินัล หรือแท็บ Code ในแอป Claude บนเดสก์ท็อป) แล้วพิมพ์ในช่องแชทของมันทีละบรรทัด กด Enter หลังแต่ละบรรทัด:
+
+```text
 /plugin marketplace add timliudev/line-cli-skills
 /plugin install line-cli@line-cli-skills
 /plugin install media-digest@line-cli-skills
 ```
+
+จากนั้นเริ่มเซสชัน Claude Code ใหม่ เพื่อให้ปลั๊กอินโหลด
+
+**วิธี B: จากเทอร์มินัล** หากติดตั้งคำสั่ง `claude` แล้ว ให้เปิด PowerShell, Terminal หรือ bash แล้วรัน:
+
+```bash
+claude plugin marketplace add timliudev/line-cli-skills
+claude plugin install line-cli@line-cli-skills
+claude plugin install media-digest@line-cli-skills
+```
+
+**สำคัญ:** บรรทัดที่ขึ้นต้นด้วย `/` **ไม่ใช่**คำสั่งเทอร์มินัล หากพิมพ์ใน PowerShell, Terminal หรือ bash จะขึ้น "'/plugin' is not recognized" ใช้ได้เฉพาะภายใน Claude Code เท่านั้น ในเทอร์มินัลให้ใช้ `claude plugin ...` ของวิธี B
 
 ### เริ่มต้นอย่างรวดเร็ว
 
