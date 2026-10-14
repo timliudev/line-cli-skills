@@ -59,6 +59,17 @@ claude plugin install media-digest@line-cli-skills
 
 **重要：** `/` で始まる行はターミナルのコマンドでは**ありません**。PowerShell・Terminal・bash に入力すると「'/plugin' is not recognized」と表示されます。Claude Code の中でのみ動作します。ターミナルでは方法 B の `claude plugin ...` を使ってください。
 
+**方法 C：その他のエージェント（Codex、Gemini CLI、Cursor、Copilot、OpenCode…）。** 2 つのスキルはオープンな [Agent Skills](https://agentskills.io) 形式に従っているため、対応するエージェントならどれでも使えます。ターミナルで実行します（Node.js が必要）。
+
+```bash
+npx skills add timliudev/line-cli-skills
+```
+
+- 2 つのスキル（`line-cli`、`media-digest`）を見つけ、どのエージェント向けにインストールするか尋ね、`.agents/skills/` に配置します（各エージェント自身のスキルフォルダへのリンク付き。Claude Code は `.claude/skills/`）。
+- 範囲：既定では**現在のプロジェクトフォルダ**のみ。`-g`（`npx skills add -g timliudev/line-cli-skills`）を付けると**すべてのプロジェクト**向け（`~/.agents/skills/`）になります。
+- 更新は `npx skills update`。
+- **同じスキルを 1 台のマシンに 2 通りの方法で入れないでください。** 方法 A または B に加えて方法 C も使うと、Claude Code には `line-cli` スキルが 2 つ見えます。どちらか一方にし、切り替えるときは先にもう一方を削除します（`claude plugin uninstall line-cli@line-cli-skills`、または `npx skills remove line-cli`）。
+
 ### クイックスタート
 
 1. Claude Code で、たとえば「LINEのグループ『Family』に新しいメッセージがないか確認して」と伝えます。

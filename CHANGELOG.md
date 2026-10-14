@@ -5,7 +5,17 @@ All notable changes to this project are documented here. Format based on
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-15
+
 ### Added
+- Works in any Agent Skills-compatible agent (Codex, Gemini CLI, Cursor, Copilot, OpenCode, ...),
+  installed with `npx skills add timliudev/line-cli-skills`. README and GUIDE (4 languages) get
+  "Option C: other agents" (global vs project scope, `npx skills update`, never install the same
+  skill both ways on one machine) and two troubleshooting rows (duplicate skills, "scripts not
+  found" outside Claude Code). Claude Code plugin install and user-skill install are unchanged.
+- `tests/test_skill_portability.py`: `${CLAUDE_SKILL_DIR}` may appear only on the single
+  `SKILL_DIR:` line of each SKILL.md; every command uses `<SKILL_DIR>/scripts/...`, each referenced
+  script exists, descriptions stay agent-neutral and within 1024 characters.
 - `scripts/broadcast.py`: send one message (text via `--text`/`--stdin`, optionally a `--file`) to a
   list of chats (one name or full chat ID per line, `#` comments and blank lines ignored). Dry run by
   default: every entry is resolved (only an exact name from a complete lookup or a full ID counts; partial, ambiguous,
@@ -52,6 +62,15 @@ All notable changes to this project are documented here. Format based on
   after they confirm (also in SKILL.md and `references/safety.md`).
 
 ### Changed
+- Portable script paths: SKILL.md and `references/` no longer use `${CLAUDE_SKILL_DIR}` in commands
+  (only Claude Code substitutes it, and only inside SKILL.md). Each SKILL.md has a "Skill folder"
+  note with a `SKILL_DIR: ${CLAUDE_SKILL_DIR}` line (Claude Code fills it in; other agents use the
+  folder the skill was loaded from) and every command is written `python "<SKILL_DIR>/scripts/x.py"`.
+- Agent-neutral wording: "the Read tool" became "your file-viewing tool (Claude Code: Read)",
+  the media-digest hand-off names the skill as `media-digest` (Claude Code plugin name
+  `media-digest:media-digest`), and the frontmatter descriptions no longer say "Claude".
+  The confirmation rules for write actions are unchanged. Python: `python`, else `python3` / `py -3`.
+- Plugin versions bumped to 0.2.0.
 - Docs: clarify that `/plugin` commands run inside Claude Code; add terminal alternative (`claude plugin ...`).
 - Archive folders are matched to a chat by the whole chat-ID segment (`<name>__<id>`, bare `<id>`,
   old `<id>__<name>`), never by prefix or suffix: a chat whose name looks like another chat's ID can

@@ -25,7 +25,7 @@ both local.
 
 A missing file is fine. A file with invalid TOML, unknown adapter keys or wrong types is an error: ASR
 returns `config: ...` with the reason and the digest falls back to frames only. Fix the file and
-re-run. Check with `cd "${CLAUDE_SKILL_DIR}/scripts" && python -m mdcore.asr list`.
+re-run. Check with `cd "<SKILL_DIR>/scripts" && python -m mdcore.asr list`.
 
 ## Minimal examples
 
@@ -146,8 +146,8 @@ api_key_env = "GROQ_API_KEY"     # already the preset default
 ```
 
 A literal `api_key = "..."` is rejected. The adapter reads the variable itself, so the secret never
-appears on a command line or in the config. The user exports it in the shell that launches Claude
-Code, for example:
+appears on a command line or in the config. The user exports it in the shell that launches the
+agent, for example:
 
 - macOS/Linux: `export GROQ_API_KEY=...` (in the shell profile)
 - Windows PowerShell: `setx GROQ_API_KEY "..."` then open a new terminal

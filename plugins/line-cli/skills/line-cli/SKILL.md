@@ -10,7 +10,7 @@ metadata:
 
 # line-cli
 
-Lets Claude work with the user's **personal LINE account** through the unofficial
+Lets the agent work with the user's **personal LINE account** through the unofficial
 [kongesque/line-cli](https://github.com/kongesque/line-cli) (`line`). Reads are free to run.
 Writes (send, react, unsend, login, logout, update) reach other people or change the login, so they
 always need the user's explicit yes.
@@ -18,15 +18,25 @@ always need the user's explicit yes.
 Talk to the user in their own language. Many users are not technical: no jargon, no raw JSON, no
 command lines unless they ask. Say what you are doing and why in one plain sentence.
 
+## Skill folder
+
+SKILL_DIR: ${CLAUDE_SKILL_DIR}
+
+Commands here and in `references/` write `<SKILL_DIR>/scripts/...`: replace `<SKILL_DIR>` with the folder that contains
+this SKILL.md. If the value on the `SKILL_DIR:` line is not a real folder path, your agent did not
+fill it in: use the folder this file was loaded from (for example `~/.agents/skills/line-cli`). Other
+relative links in this file (`references/...`) are relative to that same folder. Run the scripts
+with `python`; if it is not found, try `python3`, or `py -3` on Windows.
+
 ## Running the scripts
 
 Every script prints one JSON document on stdout and diagnostics on stderr. Call them like this:
 
 ```
-python "${CLAUDE_SKILL_DIR}/scripts/<script>.py" ...
+python "<SKILL_DIR>/scripts/<script>.py" ...
 ```
 
-If `python` is not found, try `python3`, or `py -3` on Windows. Python 3.11 or newer is required;
+Python 3.11 or newer is required;
 if only an older Python exists, tell the user and offer to help install a newer one.
 
 Shared exit codes: `0` ok, `1` failed, `2` usage error, `3` needs the user (a confirmation, a
@@ -36,7 +46,7 @@ choice, or a manual step), `4` (`lineq.py resolve` and `sync.py` only) no chat m
 
 Run this the first time, and whenever a command says `line` is missing or the user is not logged in.
 
-1. **Check.** `python "${CLAUDE_SKILL_DIR}/scripts/setup.py" --check`. Look at `next_step`:
+1. **Check.** `python "<SKILL_DIR>/scripts/setup.py" --check`. Look at `next_step`:
    `ready` (go to everyday use), `install`, `fix_keyring`, `login`, or `retry_check`
    (another process held the session; wait a few seconds and run it again).
 2. **Install** (when `line.found` is false). First explain in plain words and ask for consent:
@@ -44,7 +54,7 @@ Run this the first time, and whenever a command says `line` is missing or the us
    official GitHub page, install it in your own user folder (no administrator rights), and check
    that the file was not tampered with. It is an unofficial tool, so using it carries a small risk
    that LINE restricts your account." Only after a clear yes:
-   `python "${CLAUDE_SKILL_DIR}/scripts/setup.py" --install --yes`.
+   `python "<SKILL_DIR>/scripts/setup.py" --install --yes`.
    Without `--yes` it only prints a plan and exits 3, which is fine for showing the user what will
    happen. Results: `installed`, `already_installed`, `failed` (see `stage`), or
    `needs_user_action`. On Linux the latter means the keyring packages are missing: show the
@@ -54,13 +64,13 @@ Run this the first time, and whenever a command says `line` is missing or the us
    Chrome extension, because LINE allows only one such session. A new terminal window will open
    where you scan a QR code with your phone, or type your password there. I never see your
    password." After a yes:
-   `python "${CLAUDE_SKILL_DIR}/scripts/login.py" --yes`
+   `python "<SKILL_DIR>/scripts/login.py" --yes`
    (add `--email ADDRESS` for password login; `--headless` on a Linux server without a keyring).
    It waits up to 5 minutes. Results: `logged_in`, `timeout`, `failed`, `already_logged_in`, or
    `manual` (no window could be opened, for example over SSH: ask the user to run
    `line login` themselves, then re-run `setup.py --check`). Never ask for a password in chat and
    never run `line login` yourself.
-4. **Confirm.** `python "${CLAUDE_SKILL_DIR}/scripts/lineq.py" run -- whoami --json` and greet the
+4. **Confirm.** `python "<SKILL_DIR>/scripts/lineq.py" run -- whoami --json` and greet the
    user by the account name. Sessions renew themselves for about a week at a time, so normally the
    user logs in once.
 
@@ -71,7 +81,7 @@ each problem. More detail (login methods, Linux, updates) is in
 ## Everyday use: read
 
 1. **Find the chat.** Never guess an ID:
-   `python "${CLAUDE_SKILL_DIR}/scripts/lineq.py" resolve "NAME"`
+   `python "<SKILL_DIR>/scripts/lineq.py" resolve "NAME"`
    - `status: resolved` (exit 0): use `id` and `name`. This includes a single partial-name match
      (`matched_by: "substring"`); there is nothing to choose, just state which chat you picked.
    - `ambiguous` or `candidates` (exit 3): list the options by name and type (group, direct, room)
@@ -79,15 +89,15 @@ each problem. More detail (login methods, Linux, updates) is in
    - `not_found` (exit 4): say so and ask for another spelling.
    A full ID (starts with `u`, `c` or `r`) can be used as is.
 2. **Sync, then read the archive.** This is the normal way to read a chat:
-   `python "${CLAUDE_SKILL_DIR}/scripts/sync.py" "NAME_OR_ID"` (details below). It saves new
+   `python "<SKILL_DIR>/scripts/sync.py" "NAME_OR_ID"` (details below). It saves new
    messages and attachments to a local archive and prints a JSON summary.
-   Then read `messages_md` from the summary with the Read tool.
+   Then read `messages_md` from the summary with your file-viewing tool (Claude Code: Read).
    - "Anything new?": read only the new part (new since the previous sync). `new_messages` is the count and
-     `new_messages_from_line` the first line of `messages.md` to read (pass it as Read `offset`).
+     `new_messages_from_line` the first line of `messages.md` to read (use it as the start line or offset when reading the file).
      `new_messages: 0` means nothing new: say so without opening the file.
    - A catch-up, a summary or a question about older messages: read the whole file, or its tail.
    - **Quick peek** without saving anything:
-     `python "${CLAUDE_SKILL_DIR}/scripts/lineq.py" run -- messages CHAT_ID --limit 20 --json`
+     `python "<SKILL_DIR>/scripts/lineq.py" run -- messages CHAT_ID --limit 20 --json`
      (newest messages, oldest first; at most the latest 100 per chat; `data` is the list). Field
      meanings and the `content_type` map: [references/json-schema.md](references/json-schema.md).
 3. **Answer the user** in their language, citing time and sender ("Anna, 14:03: ..."). Quote only
@@ -103,7 +113,7 @@ each problem. More detail (login methods, Linux, updates) is in
 For "who replied to my message X?" or "who reacted to it?":
 
 1. Sync the chat first (`sync.py`), so the archive is current.
-2. Run `python "${CLAUDE_SKILL_DIR}/scripts/thread.py" CHAT_ID --text "part of the text" [--from NAME]`
+2. Run `python "<SKILL_DIR>/scripts/thread.py" CHAT_ID --text "part of the text" [--from NAME]`
    (or `--message MESSAGE_ID`; `--depth 2` also follows replies to the replies). `CHAT_ID` can be
    the archive folder or a full chat ID. Output: `target`, `replies[]` (id, time, sender, first
    line) and `reactions[]` (type_label, sender, time). Exit `3` lists `candidates` when several
@@ -113,8 +123,8 @@ For "who replied to my message X?" or "who reacted to it?":
    found: a reply or reaction LINE no longer returns (older than the latest 100 and never synced)
    is invisible, so say so when the answer is "nobody" and the target is old.
 4. LINE emoji reactions appear as a cached image or a label. If the meaning of one matters to the
-   answer and it has no label (`emoji.py list --unlabeled`), Read its PNG once, then save a short
-   label with `python "${CLAUDE_SKILL_DIR}/scripts/emoji.py" label PRODUCT_ID/EMOJI_ID "OK hand"`
+   answer and it has no label (`emoji.py list --unlabeled`), open its PNG once, then save a short
+   label with `python "<SKILL_DIR>/scripts/emoji.py" label PRODUCT_ID/EMOJI_ID "OK hand"`
    so later syncs and other chats reuse it. Do not label proactively; looking at images costs tokens.
 
 Other reads: `chats --search TEXT --json`, `contacts --search TEXT --json`. Plain `chats --json`
@@ -130,17 +140,17 @@ is needed. The summary lists `new_files` (each has `path`) and `failed_files`. I
 an attachment is a link such as `[Image](files/20261012-140312_1234567890.jpg)`; a failed one says
 why (`expired`, `over 20 MiB, not downloaded`, `external link`).
 
-- **Images and PDFs**: open the file with the Read tool.
-- **Video and audio (including voice messages)**: use the `media-digest:media-digest` skill if it
-  is installed, with `--out "<archive_dir>/files/<file name>.digest"` so the result is cached next
+- **Images and PDFs**: open the file with your file-viewing tool (Claude Code: Read).
+- **Video and audio (including voice messages)**: use the `media-digest` skill if it is installed
+  (Claude Code plugin name: `media-digest:media-digest`; other agents: just `media-digest`), with `--out "<archive_dir>/files/<file name>.digest"` so the result is cached next
   to the file and never redone. If it is not available, report the file path and say that
-  installing the `media-digest` plugin lets Claude understand video and audio.
+  installing the `media-digest` plugin lets the agent understand video and audio.
 - Other files: report the name and path, and read them only if the user asks and the type is readable.
 
 An attachment that is not in the archive (older than the latest 100 messages, or skipped) can
 still be fetched once, to a **new file outside any repo** (existing paths are never overwritten and
 the folder must exist):
-`python "${CLAUDE_SKILL_DIR}/scripts/lineq.py" run -- download CHAT_ID --message MESSAGE_ID --output PATH --json`
+`python "<SKILL_DIR>/scripts/lineq.py" run -- download CHAT_ID --message MESSAGE_ID --output PATH --json`
 Give the file an extension that matches `content_type` (1 image `.jpg`, 2 video `.mp4`,
 3 audio `.m4a`, 14 file: use `file_name`). Limit 20 MiB; expired, too large and external-link
 attachments fail with a specific error kind ([references/errors.md](references/errors.md)).
@@ -161,7 +171,7 @@ for real. Read [references/safety.md](references/safety.md) before the first wri
 3. Run it once, with `--yes` (lineq refuses state-changing commands without it, exit 3):
    - Text (always via stdin, so quotes and newlines survive):
      ```
-     python "${CLAUDE_SKILL_DIR}/scripts/lineq.py" run --yes -- send CHAT_ID --stdin --json <<'EOF'
+     python "<SKILL_DIR>/scripts/lineq.py" run --yes -- send CHAT_ID --stdin --json <<'EOF'
      message text here
      EOF
      ```
@@ -205,7 +215,7 @@ as plain `send` (not separately verified live).
    chat. Wait for an explicit yes.
 5. Then run once:
    ```
-   python "${CLAUDE_SKILL_DIR}/scripts/lineq.py" run --yes -- send CHAT_ID --stdin --reply-to MESSAGE_ID --json <<'EOF'
+   python "<SKILL_DIR>/scripts/lineq.py" run --yes -- send CHAT_ID --stdin --reply-to MESSAGE_ID --json <<'EOF'
    reply text here
    EOF
    ```
@@ -228,7 +238,7 @@ with `--yes`. Never build a loop of `send` calls yourself.
    line (`#` comment lines and blank lines are ignored). Pass the text on stdin so quotes survive.
 2. **Dry run first** (nothing is sent):
    ```
-   python "${CLAUDE_SKILL_DIR}/scripts/broadcast.py" --recipients LIST.txt --stdin [--file PATH] <<'EOF'
+   python "<SKILL_DIR>/scripts/broadcast.py" --recipients LIST.txt --stdin [--file PATH] <<'EOF'
    message text here
    EOF
    ```
@@ -280,8 +290,8 @@ chat, adds the new ones to a local archive and downloads new attachments right a
 them, and only the latest 100 messages can be reached at all).
 
 ```
-python "${CLAUDE_SKILL_DIR}/scripts/sync.py" CHAT        # a name or a full ID
-python "${CLAUDE_SKILL_DIR}/scripts/sync.py" --all       # every chat, one after another
+python "<SKILL_DIR>/scripts/sync.py" CHAT        # a name or a full ID
+python "<SKILL_DIR>/scripts/sync.py" --all       # every chat, one after another
 ```
 
 Options: `--types image,video,audio,file`, `--max-bytes N`, `--no-download` (text only), `--name
@@ -339,7 +349,7 @@ Use it when the user wants the archive to stay current without asking, wants to 
 notifications. Starting a background process on the user's machine needs their yes first.
 
 ```
-python "${CLAUDE_SKILL_DIR}/scripts/watch.py" [--archive NAME_OR_ID ...] [--vip NAME_OR_ID ...] [--no-notify] [--no-initial-sync] [--no-download] [--duration SECONDS] [--log FILE]
+python "<SKILL_DIR>/scripts/watch.py" [--archive NAME_OR_ID ...] [--vip NAME_OR_ID ...] [--no-notify] [--no-initial-sync] [--no-download] [--duration SECONDS] [--log FILE]
 ```
 
 - **VIP notifications**: chats listed in `config.toml` (`[watch]`, `vip_chats = ["Alice", "C..."]`,

@@ -32,6 +32,17 @@ claude plugin install media-digest@line-cli-skills
 
 **สำคัญ:** บรรทัดที่ขึ้นต้นด้วย `/` **ไม่ใช่**คำสั่งเทอร์มินัล หากพิมพ์ใน PowerShell, Terminal หรือ bash จะขึ้น "'/plugin' is not recognized" ใช้ได้เฉพาะภายใน Claude Code เท่านั้น ในเทอร์มินัลให้ใช้ `claude plugin ...` ของวิธี B
 
+**วิธี C: เอเจนต์อื่น (Codex, Gemini CLI, Cursor, Copilot, OpenCode…)** ทั้งสองสกิลใช้รูปแบบเปิด [Agent Skills](https://agentskills.io) เอเจนต์ใดที่รองรับก็ใช้ได้ รันในเทอร์มินัล (ต้องมี Node.js):
+
+```bash
+npx skills add timliudev/line-cli-skills
+```
+
+- โปรแกรมจะพบทั้งสองสกิล (`line-cli`, `media-digest`) ถามว่าจะติดตั้งให้เอเจนต์ใด แล้วติดตั้งไว้ใน `.agents/skills/` (พร้อมลิงก์ไปยังโฟลเดอร์สกิลของแต่ละเอเจนต์ สำหรับ Claude Code คือ `.claude/skills/`)
+- ขอบเขต: ค่าเริ่มต้นติดตั้งเฉพาะ**โฟลเดอร์โปรเจกต์ปัจจุบัน** ใส่ `-g` (`npx skills add -g timliudev/line-cli-skills`) เพื่อติดตั้งให้**ทุกโปรเจกต์** (`~/.agents/skills/`)
+- อัปเดตภายหลังด้วย `npx skills update`
+- **อย่าติดตั้งสกิลเดียวกันสองวิธีในเครื่องเดียว** หากใช้วิธี A หรือ B แล้วติดตั้งด้วยวิธี C อีก Claude Code จะเห็นสกิล `line-cli` ซ้ำสองตัว ให้เลือกทางเดียว หากจะเปลี่ยนวิธี ให้ลบอีกทางก่อน (`claude plugin uninstall line-cli@line-cli-skills` หรือ `npx skills remove line-cli`)
+
 - `line-cli` สำหรับ LINE `media-digest` เป็นตัวเลือกเพิ่มเติม ใช้ได้กับไฟล์วิดีโอหรือเสียงทุกไฟล์ ติดตั้งหากคุณต้องการให้ Claude เข้าใจวิดีโอและข้อความเสียงของ LINE
 - คุณต้องมี Python 3.11 ขึ้นไป หากระบบหา `python` ไม่พบ Claude จะลอง `python3` หรือ `py -3`
 - โปรแกรม `line` จาก kongesque/line-cli ติดตั้งแยกต่างหาก คุณไม่ต้องทำเอง: ครั้งแรกที่ใช้ LINE Claude จะอธิบายว่าจะติดตั้งอะไร และถามคุณก่อน (ดูหัวข้อถัดไป)
@@ -164,5 +175,7 @@ preset = "groq"                                       # api_key_env = "GROQ_API_
 | ส่งข้อความหาบุคคลหนึ่งล้มเหลวทุกครั้งพร้อมข้อความ "LINE request failed" | ข้อจำกัดที่ทราบ: การส่งโดยทั่วไปใช้งานได้ แต่กุญแจ Letter Sealing ของบุคคลนั้นเป็นเวอร์ชันเก่า LINE จึงปฏิเสธ (ข้อผิดพลาด 10051 / 86 "e2ee or version mismatch") และต้นทางไม่ลดเวอร์ชันแล้วลองใหม่ ข้อความไม่ได้ถูกส่ง Claude จะแจ้งตามจริงและไม่ลองส่งซ้ำ ให้ส่งจากแอป LINE แทน การอ่านแชตนั้นยังใช้ได้ตามปกติ |
 | `chats --search` หรือการค้นหาชื่อสมาชิกกลุ่มล้มเหลวพร้อม "LINE request failed" | บั๊กต้นทาง: ถ้าในชุดข้อมูลมีบัญชีที่ถูกลบหรือสมาชิกที่ไม่ใช่เพื่อน การค้นหารายชื่อของ LINE จะล้มเหลวทั้งชุด มีวิธีแก้ลัดไว้แล้ว (ค้นเฉพาะแชตที่ยังใช้งาน และอ่านชื่อจากข้อความแชต) ดูสองแถวด้านบน |
 | ติดตั้งบน Windows ใน Git Bash แล้วเกิดข้อผิดพลาด `tar` | GNU tar ของ Git อ่านเส้นทาง `C:` ไม่ได้ ตอนนี้ตัวติดตั้งจะวาง System32 ของ Windows ไว้หน้าสุดของ PATH ถ้าติดตั้งเอง ให้รันจาก PowerShell |
+| มีสกิล `line-cli` (หรือ `media-digest`) สองตัว หรือสกิลเดียวทำงานซ้ำสองครั้ง | ติดตั้งสกิลเดียวกันทั้งเป็นปลั๊กอินของ Claude Code และด้วย `npx skills add` ให้เหลือทางเดียว: `claude plugin uninstall line-cli@line-cli-skills` หรือ `npx skills remove line-cli` |
+| ไม่ใช่ Claude Code: เอเจนต์บอกว่าหา `scripts/...py` ไม่พบ หรือแสดง `<SKILL_DIR>` | เอเจนต์ไม่ได้ใส่โฟลเดอร์ของสกิลให้ บอกตำแหน่งสกิล (ติดตั้งแบบ global คือ `~/.agents/skills/line-cli` แบบโปรเจกต์คือ `.agents/skills/line-cli` ในโปรเจกต์) แล้วให้รันสคริปต์จากที่นั่น หากเอเจนต์ไม่ตามลิงก์ ให้ติดตั้งใหม่ด้วย `npx skills add --copy timliudev/line-cli-skills` |
 
 [กลับไปที่ README](../README.th.md)

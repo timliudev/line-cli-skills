@@ -59,6 +59,17 @@ claude plugin install media-digest@line-cli-skills
 
 **Important:** lines that start with `/` are **not** terminal commands. Typing them into PowerShell, Terminal or bash gives "'/plugin' is not recognized". They only work inside Claude Code. In a terminal, use the `claude plugin ...` form of Option B.
 
+**Option C: other agents (Codex, Gemini CLI, Cursor, Copilot, OpenCode…).** Both skills follow the open [Agent Skills](https://agentskills.io) format, so any agent that supports it can use them. In a terminal (needs Node.js):
+
+```bash
+npx skills add timliudev/line-cli-skills
+```
+
+- It finds both skills (`line-cli`, `media-digest`), asks which agents to install for, and installs them under `.agents/skills/` (with links into each agent's own skills folder, for Claude Code `.claude/skills/`).
+- Scope: by default the skills go into the **current project folder** only; add `-g` (`npx skills add -g timliudev/line-cli-skills`) to install for **all your projects** (`~/.agents/skills/`).
+- Update later with `npx skills update`.
+- **Do not install the same skill both ways on one machine.** If you used Option A or B and also Option C, Claude Code sees two `line-cli` skills. Pick one route; to switch, remove the other first (`claude plugin uninstall line-cli@line-cli-skills`, or `npx skills remove line-cli`).
+
 ### Quick start
 
 1. In Claude Code say, for example: "Check my LINE group Family for new messages."

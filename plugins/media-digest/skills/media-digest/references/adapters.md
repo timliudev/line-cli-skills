@@ -69,7 +69,7 @@ Conventions:
 ## Check what works
 
 ```
-cd "${CLAUDE_SKILL_DIR}/scripts"
+cd "<SKILL_DIR>/scripts"
 python -m mdcore.asr list                       # probes every adapter, nothing is downloaded
 python -m mdcore.asr run AUDIO.wav --lang zh    # run the chain on one file
 ```

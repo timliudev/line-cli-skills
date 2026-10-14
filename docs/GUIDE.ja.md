@@ -32,6 +32,17 @@ claude plugin install media-digest@line-cli-skills
 
 **重要：** `/` で始まる行はターミナルのコマンドでは**ありません**。PowerShell・Terminal・bash に入力すると「'/plugin' is not recognized」と表示されます。Claude Code の中でのみ動作します。ターミナルでは方法 B の `claude plugin ...` を使ってください。
 
+**方法 C：その他のエージェント（Codex、Gemini CLI、Cursor、Copilot、OpenCode…）。** 2 つのスキルはオープンな [Agent Skills](https://agentskills.io) 形式に従っているため、対応するエージェントならどれでも使えます。ターミナルで実行します（Node.js が必要）。
+
+```bash
+npx skills add timliudev/line-cli-skills
+```
+
+- 2 つのスキル（`line-cli`、`media-digest`）を見つけ、どのエージェント向けにインストールするか尋ね、`.agents/skills/` に配置します（各エージェント自身のスキルフォルダへのリンク付き。Claude Code は `.claude/skills/`）。
+- 範囲：既定では**現在のプロジェクトフォルダ**のみ。`-g`（`npx skills add -g timliudev/line-cli-skills`）を付けると**すべてのプロジェクト**向け（`~/.agents/skills/`）になります。
+- 更新は `npx skills update`。
+- **同じスキルを 1 台のマシンに 2 通りの方法で入れないでください。** 方法 A または B に加えて方法 C も使うと、Claude Code には `line-cli` スキルが 2 つ見えます。どちらか一方にし、切り替えるときは先にもう一方を削除します（`claude plugin uninstall line-cli@line-cli-skills`、または `npx skills remove line-cli`）。
+
 - `line-cli` は LINE 用です。`media-digest` は任意で、どの動画や音声ファイルにも使えます。LINE の動画やボイスメッセージを Claude に理解させたい場合にインストールしてください。
 - Python 3.11 以上が必要です。システムで `python` が見つからない場合、Claude は `python3` または `py -3` を試します。
 - kongesque/line-cli の `line` プログラムは別途インストールします。ご自身で行う必要はありません。初めて LINE を使うときに、Claude がインストール内容を説明し、先に確認を取ります（次のセクション）。
@@ -164,5 +175,7 @@ Claude に「LINE のドクターを実行して」と依頼してください�
 | 特定の相手への送信が毎回「LINE request failed」で失敗する | 既知の制限です。送信自体は動作しますが、その相手の Letter Sealing の鍵が古いバージョンのため LINE が拒否し（エラー 10051／86「e2ee or version mismatch」）、上流はバージョンを下げて再試行しません。メッセージは送信されておらず、Claude はその旨を伝え、再試行しません。LINE アプリから送ってください。そのトークの読み取りは問題ありません |
 | `chats --search` やグループメンバー名の取得が「LINE request failed」で失敗する | 上流のバグです。同じバッチに削除済みアカウントや友だちでないメンバーがいると、LINE の連絡先取得がバッチ全体で失敗します。回避済みです（アクティブなトークのみ検索、名前はトーク本文から取得）。上の2行を参照してください |
 | Git Bash で Windows のインストールが `tar` エラーになる | Git 同梱の GNU tar は `C:` パスを読めません。インストール時は Windows 標準の System32 を PATH の先頭に置くようになりました。手動で行う場合は PowerShell から実行してください |
+| `line-cli`（または `media-digest`）スキルが 2 つ表示される、または 1 つが 2 回動く | 同じスキルを Claude Code プラグインと `npx skills add` の両方で入れています。どちらか一方に：`claude plugin uninstall line-cli@line-cli-skills` または `npx skills remove line-cli` |
+| Claude Code 以外：エージェントが `scripts/...py` を見つけられない、または `<SKILL_DIR>` と表示される | エージェントがスキルフォルダを補完していません。スキルの場所（グローバルは `~/.agents/skills/line-cli`、プロジェクト単位はプロジェクト内の `.agents/skills/line-cli`）を伝え、そこからスクリプトを実行させてください。リンクをたどれないエージェントは `npx skills add --copy timliudev/line-cli-skills` で入れ直します |
 
 [READMEに戻る](../README.ja.md)

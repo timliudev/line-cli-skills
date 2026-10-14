@@ -18,7 +18,7 @@ running an install. Sizes below are approximate.
 
 | You want | You need |
 | --- | --- |
-| Images and PDFs | nothing (Claude reads them directly) |
+| Images and PDFs | nothing (the agent reads them directly) |
 | Video keyframes | ffmpeg + ffprobe |
 | Transcripts of video or audio | ffmpeg + ffprobe, plus one ASR backend |
 | Easiest local ASR | uv (then `faster_whisper` installs itself on first use) |
@@ -123,7 +123,7 @@ for cloud services, so get consent first. Recipes and presets are in [config.md]
 ## Check the result
 
 ```
-cd "${CLAUDE_SKILL_DIR}/scripts"
+cd "<SKILL_DIR>/scripts"
 python -m mdcore.asr list
 ```
 

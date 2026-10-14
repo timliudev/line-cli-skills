@@ -32,6 +32,17 @@ claude plugin install media-digest@line-cli-skills
 
 **注意：** 以 `/` 開頭的行**不是**終端機指令。貼到 PowerShell、Terminal 或 bash 會出現「'/plugin' is not recognized」。它們只能在 Claude Code 裡面用；在終端機請用方式 B 的 `claude plugin ...`。
 
+**方式 C：其他 AI 代理（Codex、Gemini CLI、Cursor、Copilot、OpenCode…）。** 兩個技能都採用開放的 [Agent Skills](https://agentskills.io) 格式，支援該格式的代理都能使用。在終端機執行（需要 Node.js）：
+
+```bash
+npx skills add timliudev/line-cli-skills
+```
+
+- 它會找到兩個技能（`line-cli`、`media-digest`），詢問要裝給哪些代理，並安裝到 `.agents/skills/`（再連結到各代理自己的技能資料夾，Claude Code 是 `.claude/skills/`）。
+- 範圍：預設只裝在**目前的專案資料夾**；加上 `-g`（`npx skills add -g timliudev/line-cli-skills`）則裝給**所有專案**（`~/.agents/skills/`）。
+- 之後用 `npx skills update` 更新。
+- **同一台電腦不要用兩種方式安裝同一個技能。** 若已用方式 A 或 B，又用方式 C，Claude Code 會看到兩個 `line-cli` 技能。請擇一；要換方式，先移除另一種（`claude plugin uninstall line-cli@line-cli-skills`，或 `npx skills remove line-cli`）。
+
 - `line-cli` 用於 LINE。`media-digest` 為選用，可處理任何影片或音訊檔案；若希望 Claude 理解 LINE 的影片與語音訊息，請安裝它。
 - 需要 Python 3.11 或更新版本。若系統找不到 `python`，Claude 會改試 `python3` 或 `py -3`。
 - kongesque/line-cli 的 `line` 程式需另外安裝。你不必自己動手：第一次使用 LINE 時，Claude 會說明將安裝什麼，並先詢問你（見下一節）。
@@ -164,5 +175,7 @@ preset = "groq"                                       # api_key_env = "GROQ_API_
 | 傳訊息給某一位聯絡人一直失敗，顯示「LINE request failed」 | 已知限制：發送本身可正常使用，但該聯絡人的 Letter Sealing 金鑰是舊版，LINE 會拒絕（錯誤 10051／86，「e2ee or version mismatch」），上游也不會降版重試。訊息沒有送出，Claude 會直接告知且不會重試。請改用 LINE App 傳送；讀取該聊天室不受影響 |
 | `chats --search` 或查詢群組成員名稱時出現「LINE request failed」 | 上游問題：同一批資料裡只要有已刪除帳號或非好友成員，LINE 的聯絡人查詢就整批失敗。已有替代做法（只搜尋活躍聊天室、改從聊天文字取得名稱），見上面兩列 |
 | 在 Git Bash 下 Windows 安裝出現 `tar` 錯誤 | Git 的 GNU tar 讀不懂 `C:` 路徑。安裝時現在會把 Windows 內建的 System32 放在 PATH 最前面；若手動安裝，請在 PowerShell 執行 |
+| 出現兩個 `line-cli`（或 `media-digest`）技能，或同一個技能跑了兩次 | 同一個技能同時用 Claude Code 外掛與 `npx skills add` 安裝了。只留一個：`claude plugin uninstall line-cli@line-cli-skills` 或 `npx skills remove line-cli` |
+| 不是 Claude Code：代理說找不到 `scripts/...py`，或顯示 `<SKILL_DIR>` | 代理沒有帶入技能資料夾。告訴它技能在哪裡（全域安裝是 `~/.agents/skills/line-cli`，專案安裝是專案內的 `.agents/skills/line-cli`），請它從那裡執行腳本。若代理不跟隨連結，請改用 `npx skills add --copy timliudev/line-cli-skills` 重新安裝 |
 
 [回到 README](../README.zh-TW.md)

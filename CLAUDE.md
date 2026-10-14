@@ -20,6 +20,7 @@ Every commit that changes behavior must update the user docs **in the same commi
 
 - Commit author email: `27921307+timliudev@users.noreply.github.com`. Never any other email.
 - SKILL.md and `references/` are written in English.
+- Skills must stay agent-neutral (open Agent Skills format): never write `${CLAUDE_SKILL_DIR}` in commands, use `<SKILL_DIR>/scripts/...` (the one `SKILL_DIR:` line per SKILL.md is the only place the variable appears; `tests/test_skill_portability.py` enforces it), and name Claude Code tools only as a parenthetical ("Claude Code: Read").
 - Python is stdlib-only, `requires-python >=3.11`; ruff + pytest must pass.
 - Never put private chat data (archives, `*.digest/`, screenshots of chats) in the repo.
 - Never commit secrets; config stores environment variable names only.

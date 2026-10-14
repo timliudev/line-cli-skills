@@ -32,6 +32,17 @@ claude plugin install media-digest@line-cli-skills
 
 **Important:** lines that start with `/` are **not** terminal commands. Typing them into PowerShell, Terminal or bash gives "'/plugin' is not recognized". They only work inside Claude Code. In a terminal, use the `claude plugin ...` form of Option B.
 
+**Option C: other agents (Codex, Gemini CLI, Cursor, Copilot, OpenCode…).** Both skills follow the open [Agent Skills](https://agentskills.io) format, so any agent that supports it can use them. In a terminal (needs Node.js):
+
+```bash
+npx skills add timliudev/line-cli-skills
+```
+
+- It finds both skills (`line-cli`, `media-digest`), asks which agents to install for, and installs them under `.agents/skills/` (with links into each agent's own skills folder, for Claude Code `.claude/skills/`).
+- Scope: by default the skills go into the **current project folder** only; add `-g` (`npx skills add -g timliudev/line-cli-skills`) to install for **all your projects** (`~/.agents/skills/`).
+- Update later with `npx skills update`.
+- **Do not install the same skill both ways on one machine.** If you used Option A or B and also Option C, Claude Code sees two `line-cli` skills. Pick one route; to switch, remove the other first (`claude plugin uninstall line-cli@line-cli-skills`, or `npx skills remove line-cli`).
+
 - `line-cli` is for LINE. `media-digest` is optional and works on any video or audio file; install it if you want Claude to understand LINE videos and voice messages.
 - You need Python 3.11 or newer. If `python` is not found on your system, Claude tries `python3` or `py -3`.
 - The `line` program from kongesque/line-cli is installed separately. You do not have to do it yourself: the first time you use LINE, Claude explains what it will install and asks first (next section).
@@ -164,5 +175,7 @@ Ask Claude to "run the LINE doctor". It runs `setup.py --doctor` from the plugin
 | Sending to one particular person always fails with "LINE request failed" | Known limit: sending works in general, but that person's Letter Sealing key is an old version, so LINE rejects it (error 10051 / 86, "e2ee or version mismatch") and upstream does not fall back. Nothing was sent; Claude says so and does not retry. Send that message from the LINE app. Reading the chat still works |
 | `chats --search` or looking up group member names fails with "LINE request failed" | Upstream bug: one deleted account or non-friend member in the batch makes LINE's contact lookup fail. Already worked around (active chats only, names read from the chat text), see the two rows above |
 | Windows install fails with a `tar` error under Git Bash | Git's GNU tar cannot read `C:` paths. The installer now puts Windows' own System32 first on PATH for the install; if you install by hand, run it from PowerShell |
+| Two `line-cli` (or `media-digest`) skills appear, or one runs twice | The skill was installed both as a Claude Code plugin and with `npx skills add`. Keep one: `claude plugin uninstall line-cli@line-cli-skills` or `npx skills remove line-cli` |
+| Not Claude Code: the agent says it cannot find `scripts/...py` or shows `<SKILL_DIR>` | The agent did not fill in the skill folder. Tell it where the skill lives (`~/.agents/skills/line-cli` for a global install, `.agents/skills/line-cli` inside the project for a project install) and ask it to run the script from there. If your agent does not follow links, reinstall with `npx skills add --copy timliudev/line-cli-skills` |
 
 [Back to the README](../README.md)

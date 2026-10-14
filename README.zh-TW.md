@@ -59,6 +59,17 @@ claude plugin install media-digest@line-cli-skills
 
 **注意：** 以 `/` 開頭的行**不是**終端機指令。貼到 PowerShell、Terminal 或 bash 會出現「'/plugin' is not recognized」。它們只能在 Claude Code 裡面用；在終端機請用方式 B 的 `claude plugin ...`。
 
+**方式 C：其他 AI 代理（Codex、Gemini CLI、Cursor、Copilot、OpenCode…）。** 兩個技能都採用開放的 [Agent Skills](https://agentskills.io) 格式，支援該格式的代理都能使用。在終端機執行（需要 Node.js）：
+
+```bash
+npx skills add timliudev/line-cli-skills
+```
+
+- 它會找到兩個技能（`line-cli`、`media-digest`），詢問要裝給哪些代理，並安裝到 `.agents/skills/`（再連結到各代理自己的技能資料夾，Claude Code 是 `.claude/skills/`）。
+- 範圍：預設只裝在**目前的專案資料夾**；加上 `-g`（`npx skills add -g timliudev/line-cli-skills`）則裝給**所有專案**（`~/.agents/skills/`）。
+- 之後用 `npx skills update` 更新。
+- **同一台電腦不要用兩種方式安裝同一個技能。** 若已用方式 A 或 B，又用方式 C，Claude Code 會看到兩個 `line-cli` 技能。請擇一；要換方式，先移除另一種（`claude plugin uninstall line-cli@line-cli-skills`，或 `npx skills remove line-cli`）。
+
 ### 快速上手
 
 1. 在 Claude Code 中可以這樣說，例如：「幫我看一下 LINE 群組 Family 有沒有新訊息。」
