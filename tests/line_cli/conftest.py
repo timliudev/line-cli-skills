@@ -36,6 +36,17 @@ def isolated_env(tmp_path, monkeypatch):
     return tmp_path
 
 
+@pytest.fixture(autouse=True)
+def offline_emoji(monkeypatch):
+    """The emoji cache never reaches the network in tests; individual tests install a fake."""
+    from linecore import emoji
+
+    def refuse(url):
+        raise OSError("network disabled in tests")
+
+    monkeypatch.setattr(emoji, "fetch_bytes", refuse)
+
+
 @pytest.fixture
 def fake_line(isolated_env, monkeypatch):
     fake = FakeLine(isolated_env / "bin", isolated_env, monkeypatch)

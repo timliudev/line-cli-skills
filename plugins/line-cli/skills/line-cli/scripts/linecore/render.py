@@ -130,8 +130,14 @@ def body_text(
     return text if isinstance(text, str) and text else "(empty message)"
 
 
-def reaction_label(rtype: Any) -> str:
-    """Text for one ``reactionType``: built-in emoji + name, LINE emoji, or an unknown marker."""
+def reaction_label(
+    rtype: Any, emoji: Mapping[str, Mapping[str, Any]] | None = None, emoji_prefix: str = ""
+) -> str:
+    """Text for one ``reactionType``: built-in emoji + name, LINE emoji, or an unknown marker.
+
+    ``emoji`` maps ``productId/emojiId`` to ``{label, file}`` from the shared emoji cache;
+    ``emoji_prefix`` is the path from the markdown to that cache folder (with trailing slash).
+    """
     if not isinstance(rtype, dict):
         return "reaction (type unknown)"
     code = rtype.get("predefinedReactionType")
@@ -144,6 +150,16 @@ def reaction_label(rtype: Any) -> str:
     if isinstance(paid, dict):
         product, emoji_id = paid.get("productId"), paid.get("emojiId")
         if isinstance(product, str) and isinstance(emoji_id, str) and product and emoji_id:
+            known = (emoji or {}).get(f"{product}/{emoji_id}") or {}
+            label = known.get("label")
+            local = known.get("file")
+            if label or local:
+                text = (
+                    f'LINE emoji "{_clean(label)}"'
+                    if label
+                    else (f"LINE emoji {_clean(product)}/{_clean(emoji_id)}")
+                )
+                return f"[{text}]({emoji_prefix}{local})" if local else text
             text = f"LINE emoji {_clean(product)}/{_clean(emoji_id)}"
             if _ID_PART.match(product) and re.fullmatch(r"\d{3}", emoji_id):
                 return f"[{text}]({STICON_URL.format(product=product, emoji=emoji_id)})"
@@ -152,7 +168,12 @@ def reaction_label(rtype: Any) -> str:
 
 
 def _reactions(
-    record: Mapping[str, Any], names: Mapping[str, str], self_mid: str | None, tz: tzinfo | None
+    record: Mapping[str, Any],
+    names: Mapping[str, str],
+    self_mid: str | None,
+    tz: tzinfo | None,
+    emoji: Mapping[str, Mapping[str, Any]] | None = None,
+    emoji_prefix: str = "",
 ) -> str:
     items = record.get("reactions")
     if not isinstance(items, list) or not items:
@@ -167,7 +188,8 @@ def _reactions(
         when = _fmt_time(at, tz)
         who = sender_label(item.get("fromUserMid"), names, self_mid)
         stamp = f", {when:%H:%M}" if when else ""
-        parts.append(f"{reaction_label(item.get('reactionType'))} ({_clean(who)}{stamp})")
+        label = reaction_label(item.get("reactionType"), emoji, emoji_prefix)
+        parts.append(f"{label} ({_clean(who)}{stamp})")
     return f"reactions: {', '.join(parts)}" if parts else ""
 
 
@@ -191,6 +213,8 @@ def render_markdown(
     tz: tzinfo | None = None,
     link_prefix: str = "files/",
     quiet_gap_days: int = DEFAULT_QUIET_GAP_DAYS,
+    emoji: Mapping[str, Mapping[str, Any]] | None = None,
+    emoji_prefix: str = "../_line_emoji/",
 ) -> Rendered:
     order = sorted(
         enumerate(records),
@@ -260,7 +284,7 @@ def render_markdown(
                 extras.append(f'in reply to {who}: "{_snippet(target["text"])}"')
             else:
                 extras.append("in reply to an earlier message")
-        reaction_text = _reactions(rec, names, self_mid, tz)
+        reaction_text = _reactions(rec, names, self_mid, tz, emoji, emoji_prefix)
         if reaction_text:
             extras.append(reaction_text)
         body_lines = body.split("\n")

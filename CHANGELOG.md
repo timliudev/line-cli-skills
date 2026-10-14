@@ -5,6 +5,33 @@ All notable changes to this project are documented here. Format based on
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-14
+
+### Added
+- `scripts/thread.py`: offline "who replied to / reacted to message X". Finds the target by message ID
+  or by text (and sender), and returns its replies (messages whose `reply_to` points at it, optionally
+  nested with `--depth`) and reactions, with sender names and reaction labels. Several matches exit 3
+  with candidates, no match exits 4. SKILL.md, `references/archive.md`, the guide (4 languages) and
+  the README feature list describe it. Only messages that are in the archive can be found.
+  Your own messages show as `Me`: sync now records your MID as `self_mid` in `state.json`.
+- Shared LINE emoji cache: sync saves each distinct LINE emoji reaction image once under
+  `<archive_root>/_line_emoji/<productId>/<emojiId>.png` (stdlib download, safe ids only, 10 s timeout,
+  1 MiB cap, PNG check), reused by every chat. Failures are recorded in `_line_emoji/index.json` and
+  retried at most every 7 days. New setting `download.line_emoji` (default `true`). The image URL is an
+  unofficial pattern; animated sticons are untested.
+- `scripts/emoji.py`: `list [--unlabeled]` and `label PRODUCT_ID/EMOJI_ID "text"` keep short labels in
+  `index.json`, so Claude looks at an image once. `messages.md` shows a labelled LINE emoji reaction as
+  `LINE emoji "<label>"`, linking the local cached file and falling back to the remote URL.
+
+### Changed
+- `references/archive.md`: new "Stability for integrations" section. The `sync.py` options and
+  summary JSON fields, the chat folder layout, the rule that non-chat directories in `archive_root`
+  start with `_`, and reading `messages.jsonl`/`contacts.json` instead of `messages.md` are stable;
+  changes are additive unless marked BREAKING here.
+- Docs: sticker messages (content type 7) are only shown as unsupported content because line-cli does
+  not expose which sticker was sent; built-in reactions map to six emoji.
+- Plugin versions bumped to 0.1.2.
+
 ## [0.1.1] - 2026-10-13
 
 ### Changed

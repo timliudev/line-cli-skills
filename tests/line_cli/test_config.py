@@ -83,7 +83,11 @@ def test_full_config_file(tmp_path):
     assert conf.archive_root == base / "line-skill" / "arch"  # relative -> config dir
     assert conf.download_types == ("image", "file")  # de-duplicated, order kept
     assert conf.download_max_bytes == 1000
-    assert conf.to_dict()["download"] == {"types": ["image", "file"], "max_bytes": 1000}
+    assert conf.to_dict()["download"] == {
+        "types": ["image", "file"],
+        "max_bytes": 1000,
+        "line_emoji": True,
+    }
 
 
 def test_tilde_is_expanded(tmp_path):

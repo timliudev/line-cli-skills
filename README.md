@@ -2,7 +2,7 @@
 
 English | [繁體中文（台灣）](README.zh-TW.md) | [日本語](README.ja.md) | [ภาษาไทย](README.th.md)
 
-Claude Code skills for working with a **personal LINE account** and the media people send you. Status: **v0.1.1 (early software)** - reading, local sync/archive and sending a text message were tested live on Windows, media digestion on synthetic media; sending fails only for some peers with old Letter Sealing keys. Details under [Status](#status).
+Claude Code skills for working with a **personal LINE account** and the media people send you. Status: **v0.1.2 (early software)** - reading, local sync/archive and sending a text message were tested live on Windows, media digestion on synthetic media; sending fails only for some peers with old Letter Sealing keys. Details under [Status](#status).
 
 <a id="disclaimer"></a>
 
@@ -21,6 +21,7 @@ Two independent Claude Code plugins:
   - Safe by design: Claude shows the chat, the exact text and the action and waits for your "yes". Writes are never retried automatically.
   - Chat names are resolved to IDs; ambiguous names are put to you, never guessed.
   - Local archive: `sync.py` saves each chat's messages (a `.jsonl` record plus a readable `.md`) in a folder on your machine and downloads new attachments right away, so Claude can tell you what is new and your history is kept from the day you start syncing, not just LINE's latest 100 messages.
+  - Who replied or reacted: `thread.py` lists the replies and reactions to one archived message, and `emoji.py` keeps short labels for the LINE emoji reactions that sync caches once per emoji (shared across chats).
 - **media-digest** - turn videos and audio into keyframes plus a timestamped transcript Claude can read. Works with any local file, not only LINE.
   - Videos: keyframes by scene detection (with timestamps) and a transcript, merged into one `digest.md` timeline.
   - Audio and voice messages: transcript with timestamps.
@@ -53,7 +54,7 @@ See the [user guide](docs/GUIDE.md) for details, configuration and troubleshooti
 
 ## Status
 
-**v0.1.1 is early software.** How far each part has been tested:
+**v0.1.2 is early software.** How far each part has been tested:
 
 - **Tested live** (a real LINE account, **Windows only**): guided install, login, chat-name resolution, sync and archive, attachment downloads, group names.
 - **macOS and Linux:** unit tests only. These have not been tried on a real macOS or Linux machine yet.

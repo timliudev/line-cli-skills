@@ -98,6 +98,25 @@ each problem. More detail (login methods, Linux, updates) is in
    (plain seconds, before the `--`, default 60) must be longer than the watch duration. Prefer
    `sync.py` unless the user asks for it.
 
+### Who replied or reacted to a message
+
+For "who replied to my message X?" or "who reacted to it?":
+
+1. Sync the chat first (`sync.py`), so the archive is current.
+2. Run `python "${CLAUDE_SKILL_DIR}/scripts/thread.py" CHAT_ID --text "part of the text" [--from NAME]`
+   (or `--message MESSAGE_ID`; `--depth 2` also follows replies to the replies). `CHAT_ID` can be
+   the archive folder or a full chat ID. Output: `target`, `replies[]` (id, time, sender, first
+   line) and `reactions[]` (type_label, sender, time). Exit `3` lists `candidates` when several
+   messages match: show them and ask, never pick. Exit `4`: not in the archive.
+3. Replies come from the `reply_to` field of other messages, and reactions from the `reactions`
+   field of the target, both in `messages.jsonl`. Only messages that are in the archive can be
+   found: a reply or reaction LINE no longer returns (older than the latest 100 and never synced)
+   is invisible, so say so when the answer is "nobody" and the target is old.
+4. LINE emoji reactions appear as a cached image or a label. If the meaning of one matters to the
+   answer and it has no label (`emoji.py list --unlabeled`), Read its PNG once, then save a short
+   label with `python "${CLAUDE_SKILL_DIR}/scripts/emoji.py" label PRODUCT_ID/EMOJI_ID "OK hand"`
+   so later syncs and other chats reuse it. Do not label proactively; looking at images costs tokens.
+
 Other reads: `chats --search TEXT --json`, `contacts --search TEXT --json`. Plain `chats --json`
 has IDs only, no names, so always search. All flags: [references/commands.md](references/commands.md).
 

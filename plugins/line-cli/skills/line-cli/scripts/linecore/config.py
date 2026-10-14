@@ -30,7 +30,7 @@ DEFAULT_MAX_BYTES = 20 * 1024 * 1024  # 20971520, upstream's attachment cap
 KNOWN_KEYS = {"line_path", "archive_root", "download", "render"}
 KNOWN_RENDER_KEYS = {"quiet_gap_days"}
 DEFAULT_QUIET_GAP_DAYS = 3
-KNOWN_DOWNLOAD_KEYS = {"types", "max_bytes"}
+KNOWN_DOWNLOAD_KEYS = {"types", "max_bytes", "line_emoji"}
 
 
 class ConfigError(ValueError):
@@ -103,6 +103,7 @@ class Config:
     config_exists: bool
     warnings: tuple[str, ...] = field(default_factory=tuple)
     render_quiet_gap_days: int = DEFAULT_QUIET_GAP_DAYS
+    download_line_emoji: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -114,6 +115,7 @@ class Config:
             "download": {
                 "types": list(self.download_types),
                 "max_bytes": self.download_max_bytes,
+                "line_emoji": self.download_line_emoji,
             },
             "render": {"quiet_gap_days": self.render_quiet_gap_days},
             "warnings": list(self.warnings),
@@ -182,6 +184,10 @@ def load_config(env: Mapping[str, str] | None = None, os_name: str | None = None
     if isinstance(max_bytes, bool) or not isinstance(max_bytes, int) or max_bytes <= 0:
         raise ConfigError(f"{cfg_path}: `download.max_bytes` must be a positive integer")
 
+    line_emoji = download.get("line_emoji", True)
+    if not isinstance(line_emoji, bool):
+        raise ConfigError(f"{cfg_path}: `download.line_emoji` must be true or false")
+
     render = raw.get("render", {})
     if not isinstance(render, dict):
         raise ConfigError(f"{cfg_path}: `render` must be a table")
@@ -210,6 +216,7 @@ def load_config(env: Mapping[str, str] | None = None, os_name: str | None = None
         config_exists=exists,
         warnings=tuple(warnings),
         render_quiet_gap_days=quiet,
+        download_line_emoji=line_emoji,
     )
 
 

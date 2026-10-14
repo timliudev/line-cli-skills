@@ -30,7 +30,7 @@ if sys.version_info < (3, 11):  # noqa: UP036 - friendly message instead of an I
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from linecore import chatlist, media, msgtext, names, runner, store  # noqa: E402
+from linecore import chatlist, emoji, media, msgtext, names, runner, store  # noqa: E402
 from linecore.config import DOWNLOAD_TYPES, Config, load_config_safe  # noqa: E402
 from linecore.render import render_markdown  # noqa: E402
 
@@ -329,11 +329,19 @@ class Syncer:
         state.update(
             {
                 "name": chat_name,
+                "self_mid": self.self_mid() or state.get("self_mid"),
                 "last_sync_at": now_iso,
                 "newest_message_id": newest["id"] if newest else None,
                 "newest_created_time": _time(newest) if newest else None,
             }
         )
+        emoji_index, emoji_warnings = emoji.ensure(
+            root,
+            emoji.keys_in(records),
+            now=now,
+            download=opts.download and cfg.download_line_emoji,
+        )
+        warnings += emoji_warnings
         rendered = render_markdown(
             records,
             chat_id=chat_id,
@@ -349,6 +357,7 @@ class Syncer:
             synced_at=now,
             tz=opts.tz,
             quiet_gap_days=cfg.render_quiet_gap_days,
+            emoji=emoji.render_info(root, emoji_index),
         )
         store.atomic_write_text(chat_dir / store.MD_NAME, rendered.text)
         store.write_json(chat_dir / store.STATE_NAME, state)

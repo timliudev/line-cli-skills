@@ -10,6 +10,9 @@ downloads attachments immediately because LINE expires them.
 
 - Command line
 - Archive layout
+- Replies, reactions and thread.py
+- LINE emoji cache and emoji.py
+- Stability for integrations
 - Configuration
 - What a sync does
 - Summary JSON
@@ -48,7 +51,7 @@ sync.py --all [same options]
 `- <chat name>__<chat_id>/            keyed by ID; a rename only changes the part before "__"
    |- messages.jsonl                  source of truth: one raw `line messages --json` item per line
    |- messages.md                     generated for reading; times are local to the machine
-   |- state.json                      last sync time, newest message, gaps, failed downloads
+   |- state.json                      last sync time, newest message, gaps, failed downloads, self_mid
    `- files/                          <YYYYMMDD-HHMMSS>_<message_id>.<ext>
 ```
 
@@ -86,11 +89,83 @@ sync.py --all [same options]
   surprise, sad, angry) as emoji plus name; a LINE emoji reaction as
   `[LINE emoji <productId>/<emojiId>](https://stickershop.line-scdn.net/sticonshop/v1/sticon/<productId>/android/<emojiId>.png)`
   (link only for a 3-digit `emojiId`; pattern from a community API spec, not official LINE docs);
-  anything else as `reaction (type unknown)`. The time is local, from `atMillis`.
+  anything else as `reaction (type unknown)`. The time is local, from `atMillis`. Cached images and
+  labels change the LINE emoji form: see "LINE emoji cache and emoji.py".
   Markers: `(possibly unsent)` after a message, and a `> ⚠ Possible gap ...` quote between messages.
 - File extensions: content type 1 `.jpg`, 2 `.mp4`, 3 `.m4a`, 14 the sanitized extension of
   `file_name` (`.bin` if none). The first bytes of the file then correct the extension for jpg,
   png, gif, webp, mp4, m4a and pdf. An existing file is never overwritten (a `-1` suffix is added).
+
+## Replies, reactions and thread.py
+
+- A reply is a message whose `reply_to` field holds the ID of the message it answers
+  (`messages.md` shows `in reply to Name: "..."`). Reactions are stored on the message that was
+  reacted to, in its `reactions` array (`fromUserMid`, `reactionType`, `atMillis`), and are refreshed
+  while that message is inside the latest 100.
+- "Who replied to / reacted to message X" therefore means: find X, then collect the messages whose
+  `reply_to` equals X's ID and read X's `reactions`. Only messages in the archive can be found.
+- `thread.py` does exactly that, offline:
+
+```
+thread.py CHAT_DIR_OR_ID --message ID [--depth N]
+thread.py CHAT_DIR_OR_ID --text SUBSTRING [--from NAME] [--depth N]
+```
+
+  `CHAT_DIR_OR_ID` is an archive folder or a full chat ID (looked up under `archive_root`). `--text`
+  is a case-insensitive substring of the message text; `--from` narrows it by sender name. Output:
+  `{target: {id, time, sender, first_line}, replies: [{id, time, sender, text_first_line}],
+  reactions: [{type_label, sender, time}]}`; with `--depth N` greater than 1 each reply also has a
+  `replies` list. Times are local `YYYY-MM-DD HH:MM`; sender names come from `contacts.json`
+  (a short ID when unknown). Exit codes: `0` ok, `1` archive unreadable, `2` usage, `3` several
+  messages match (`candidates` lists them), `4` no archive or no match.
+
+## LINE emoji cache and emoji.py
+
+Built-in reactions (like, love, laugh, surprise, sad, angry) are six fixed emoji. Other reactions are
+LINE emoji (`reactionType.paidReactionType`: `productId` + `emojiId`). Sync caches their images once,
+shared by all chats:
+
+```
+<archive_root>/_line_emoji/
+|- index.json                 per emoji "<productId>/<emojiId>": file, label, last_attempt, error
+`- <productId>/<emojiId>.png
+```
+
+- The image comes from `https://stickershop.line-scdn.net/sticonshop/v1/sticon/<productId>/android/<emojiId>.png`,
+  an **unofficial** pattern from a community API spec. It is fetched only for a safe `productId`
+  (letters, digits, `_`, `-`) and a 3-digit `emojiId`, with a 10 s timeout, at most 1 MiB, and the
+  PNG signature is checked. Animated sticons are untested.
+- An emoji already cached is never downloaded again, so the archive grows only by unique emoji, not
+  per use. A failed download is recorded in `index.json` (`last_attempt`, `error`) and not retried for
+  7 days. `download.line_emoji = false` (or `--no-download`) switches downloading off.
+- `messages.md` writes a LINE emoji reaction as a link to the **local** file
+  (`../_line_emoji/<productId>/<emojiId>.png`); with a label it reads `LINE emoji "OK hand"`. When the
+  image is not cached it falls back to the remote URL, and an unlabelled cached one reads
+  `LINE emoji <productId>/<emojiId>`.
+- Labels are short text kept in `index.json`: `emoji.py list [--unlabeled]` shows cached emoji with
+  their absolute image path, `emoji.py label PRODUCT_ID/EMOJI_ID "OK hand"` saves one (an empty text
+  removes it; at most 40 characters, brackets and quotes are dropped). Exit `4`: unknown emoji. A new
+  label shows in `messages.md` after the next sync of a chat that uses it.
+- Sticker **messages** (content type 7) are shown as unsupported content: line-cli does not say which
+  sticker was sent.
+
+## Stability for integrations
+
+Other tools may build on the archive. These parts are stable:
+
+1. **`sync.py` command line and summary JSON.** The options and the fields `chat_id`, `archive_dir`,
+   `messages_md`, `new_messages`, `new_messages_from_line`, `new_files`, `failed_files`,
+   `gap_possible` and `warnings` (and the other fields listed under "Summary JSON") are not renamed or
+   removed. Changes are additive only; anything else is marked **BREAKING** in `CHANGELOG.md`.
+2. **Chat folders** are `<name>__<chat_id>` (or just `<chat_id>` when the name is unknown) and hold
+   `messages.jsonl`; attachments are `files/<YYYYMMDD-HHMMSS>_<message_id>.<ext>`.
+3. **Other entries in `archive_root` are not chats.** Directories that are not chats always start with
+   `_` (for example `_line_emoji/`) and never end with `__<chat_id>`; files live at the root (for
+   example `contacts.json`, the name cache: `{"schema": 1, "names": {"<mid>": {"name": "...", "ts": ms}}}`).
+   Skip every directory whose name starts with `_`.
+4. **Read `messages.jsonl`, not `messages.md`.** `messages.md` is for people and its line format may
+   change. Integrations should use `messages.jsonl` (`reply_to`, `reactions`, `created_time`, ...) and
+   `contacts.json` for names.
 
 ## Configuration
 
@@ -111,6 +186,7 @@ archive_root = "D:/somewhere/line-personal"
 [download]
 types = ["image", "video", "audio", "file"]   # attachment types downloaded automatically
 max_bytes = 20971520                          # larger attachments are only marked in messages.md
+line_emoji = true                             # cache LINE emoji reaction images once (see above)
 [render]
 quiet_gap_days = 3                            # messages.md notes silences longer than this; 0 = off
 ```
