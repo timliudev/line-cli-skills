@@ -1,6 +1,6 @@
 {
   "name": "media-digest",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Digest video and audio files into keyframes and a timestamped transcript so Claude can understand them. Pluggable ASR backends.",
   "author": {
     "name": "Tim Liu",

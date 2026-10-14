@@ -58,6 +58,7 @@ MAX_FILE_BYTES = 20 * 1024 * 1024  # upstream attachment cap
 NOTHING_SENT = {
     "busy",
     "not_logged_in",
+    "session_replaced",
     "binary_missing",
     "usage",
     "message_too_long",

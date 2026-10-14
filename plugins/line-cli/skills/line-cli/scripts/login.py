@@ -45,10 +45,12 @@ LINUX_TERMINALS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("konsole", ("-e",)),
     ("xterm", ("-e",)),
 )
-# Keeps the window open after line exits so the user can read the result.
+# Window behaviour after `line login` exits: close by itself on success, stay open on failure.
+DONE_MESSAGE = "Login complete - this window closes in 3 seconds."
+FAILED_MESSAGE = "Login did not finish (see the message above). Press Enter to close this window."
 LINUX_WRAPPER = (
-    '"$0" "$@"; status=$?; '
-    "printf '\\n(line exited with status %s) Press Enter to close...' \"$status\"; read _"
+    f'"$0" "$@" && {{ echo; echo {shlex.quote(DONE_MESSAGE)}; sleep 3; }} '
+    f"|| {{ echo; printf '%s ' {shlex.quote(FAILED_MESSAGE)}; read -r _; }}"
 )
 
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
@@ -66,14 +68,28 @@ def applescript_quote(text: str) -> str:
 
 
 def windows_command(line_path: str, extra: list[str]) -> list[str]:
-    inner = "& " + ps_quote(line_path) + " login" + "".join(" " + ps_quote(a) for a in extra)
-    outer = "Start-Process powershell -ArgumentList '-NoExit','-Command'," + ps_quote(inner)
+    inner = (
+        "& "
+        + ps_quote(line_path)
+        + " login"
+        + "".join(" " + ps_quote(a) for a in extra)
+        + "; if ($LASTEXITCODE -eq 0) { Write-Host ''; Write-Host "
+        + ps_quote(DONE_MESSAGE)
+        + "; Start-Sleep 3 } else { Write-Host ''; Read-Host "
+        + ps_quote(FAILED_MESSAGE)
+        + " }"
+    )
+    outer = "Start-Process powershell -ArgumentList '-Command'," + ps_quote(inner)
     shell = shutil.which("powershell") or shutil.which("pwsh") or "powershell"
     return [shell, "-NoProfile", "-Command", outer]
 
 
 def macos_command(line_path: str, extra: list[str]) -> list[str]:
-    shell_line = " ".join(shlex.quote(p) for p in [line_path, "login", *extra])
+    login = " ".join(shlex.quote(p) for p in [line_path, "login", *extra])
+    shell_line = (
+        f"{login} && {{ echo; echo {shlex.quote(DONE_MESSAGE)}; sleep 3; }} "
+        f"|| {{ echo; printf '%s ' {shlex.quote(FAILED_MESSAGE)}; read -r _; }}; exit"
+    )
     return [
         "osascript",
         "-e",

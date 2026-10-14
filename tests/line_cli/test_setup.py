@@ -286,9 +286,32 @@ def test_install_windows_runs_pinned_script(fake_line, capsys, monkeypatch):
     assert env[path_key].split(";")[0].lower().endswith("system32")
     assert not any("sudo" in part for part in cmd)
     assert out["status"] == "installed" and out["line"]["version"] == "v0.4.0"
+    assert out["verification"]["installer_script_sha256"].startswith("verified")
+    assert "SHA256SUMS" in out["verification"]["release_archive"]
     assert out["line"]["source"] == "known"  # not on PATH in this session, still usable
     assert "path_note" in out and out["next"] == "login"
     assert not Path(cmd[-1]).exists()  # temp dir cleaned
+
+
+def test_verification_reports_only_what_was_checked():
+    pinned = setup._verification({"method": "install-release.sh", "script_hash_pinned": True})
+    assert pinned["installer_script_sha256"].startswith("verified")
+    assert "SHA256SUMS" in pinned["release_archive"]
+    unpinned = setup._verification({"method": "install-release.sh", "script_hash_pinned": False})
+    assert unpinned["installer_script_sha256"].startswith("not verified")
+    brew = setup._verification({"method": "homebrew"})
+    assert "not pinned or verified" in brew["release_archive"]
+    assert "SHA256SUMS" not in brew["release_archive"]
+
+
+def test_next_step_for_replaced_session():
+    status = {
+        "line": {"found": True},
+        "keyring": "ok",
+        "logged_in": None,
+        "login_error": "session_replaced",
+    }
+    assert setup._next_step(status) == "session_replaced"
 
 
 def _sys32(root):

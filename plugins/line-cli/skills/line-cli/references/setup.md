@@ -125,6 +125,15 @@ Rules that apply to every method:
   (`login.go:101-139`).
 - Signing in may sign out the LINE Chrome extension or another Chrome-style client, because LINE allows
   one such session at a time (`docs/CLI.md:10-12`).
+- One device at a time: logging in with line-cli on a second computer invalidates the first.
+  The first then fails with "LINE session was invalidated or replaced by another client; run line
+  login" (classified as `session_replaced`). Ask the user before logging in again; doing so signs
+  the other device out.
+- The login window opened by `login.py` closes itself 3 seconds after a successful login. On
+  failure or cancel it stays open with the error and waits for Enter.
+- `setup.py --install` reports a `verification` object: the installer script's SHA-256 against the
+  pinned hash, and the release archive checked by the upstream installer against `SHA256SUMS.txt`.
+  Homebrew installs are not pinned or verified by this skill.
 - Ctrl-C during login leaves the old local session in place if the new one was not saved
   (`docs/CLI.md:138-141`).
 - For SSH: `ssh -t user@host` then `line login` (`docs/CLI.md:146-153`).

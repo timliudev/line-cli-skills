@@ -227,6 +227,8 @@ def _next_step(status: dict[str, Any]) -> str:
         return "fix_keyring"
     if status["logged_in"] is False:
         return "login"
+    if status.get("login_error") == "session_replaced":
+        return "session_replaced"
     if status["logged_in"] is None:
         return "retry_check"
     return "ready"
@@ -327,6 +329,23 @@ def _fetch_verified_script(plan: dict[str, Any], workdir: Path) -> Path:
     path = workdir / plan["method"]
     path.write_bytes(data)
     return path
+
+
+def _verification(plan: dict[str, Any]) -> dict[str, str]:
+    """What this run actually checked; only reached after the installer exited 0."""
+    if plan["method"] == "homebrew":
+        return {
+            "installer_script_sha256": "not applicable (Homebrew)",
+            "release_archive": "not pinned or verified by this skill; Homebrew installs the "
+            "tap's current release and does its own checks",
+        }
+    return {
+        "installer_script_sha256": "verified against the built-in pinned hash"
+        if plan.get("script_hash_pinned")
+        else "not verified (this tag has no pinned hash)",
+        "release_archive": "checked by the upstream installer against the release's "
+        "SHA256SUMS.txt (it aborts on a mismatch)",
+    }
 
 
 def cmd_install(config, *, yes: bool, tag: str, force: bool) -> tuple[dict[str, Any], int]:
@@ -452,6 +471,7 @@ def cmd_install(config, *, yes: bool, tag: str, force: bool) -> tuple[dict[str, 
     version = runner.line_version(binary=located.path)
     result: dict[str, Any] = {
         "status": "installed",
+        "verification": _verification(plan),
         "line": {
             "path": located.path,
             "source": located.source,
@@ -586,14 +606,25 @@ def run_doctor(config, config_error: str | None) -> tuple[dict[str, Any], int]:
             )
         else:
             kind = result.error.kind if result.error else "unknown"
-            items.append(
-                _item(
-                    "login",
-                    "warn",
-                    f"Could not tell whether you are logged in ({kind}).",
-                    "Retry in a moment; if it persists run `line auth status`.",
+            if kind == "session_replaced":
+                items.append(
+                    _item(
+                        "login",
+                        "fail",
+                        "The LINE session was replaced by another client (another computer or "
+                        "Chrome LINE).",
+                        "Ask the user first: logging in again here signs the other device out.",
+                    )
                 )
-            )
+            else:
+                items.append(
+                    _item(
+                        "login",
+                        "warn",
+                        f"Could not tell whether you are logged in ({kind}).",
+                        "Retry in a moment; if it persists run `line auth status`.",
+                    )
+                )
     else:
         items.append(_item("version", "skip", "line is not installed."))
         items.append(_item("login", "skip", "line is not installed."))

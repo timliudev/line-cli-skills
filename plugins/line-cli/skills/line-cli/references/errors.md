@@ -162,6 +162,7 @@ message list and inform the user. Do not resend the file as a new message until 
 | --- | --- | --- |
 | `no saved LINE session; run line login` | 1 | Ask the user to run `line login` in a terminal. |
 | `LINE session was logged out; run line login` | 1 | The session was invalidated by LINE. The user must log in again. |
+| `LINE session was invalidated or replaced by another client; run line login` | 1 | Kind `session_replaced`. LINE allows one Chrome-style session per account: another computer running line-cli, or LINE in Chrome, took over. Ask the user before logging in again, because that signs the other device out. Not retryable. |
 | `a LINE session is already saved; run login in a terminal to confirm replacement, or use --force` | 1 | Non-interactive login refuses to replace a session. Ask the user. Use `--force` only with explicit approval. |
 | `QR login and headless enrollment require an interactive terminal. LINE was not contacted` | 1 | Login cannot run from an agent. Ask the user to run it. |
 | `login requires an interactive terminal for password input` | 1 | Email login also needs a terminal. |

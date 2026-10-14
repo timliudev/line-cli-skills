@@ -40,6 +40,7 @@ FETCH_LIMIT = 100  # upstream returns at most this many recent messages per chat
 # Failures that say nothing about one attachment: stop trying the rest of this chat.
 SYSTEMIC = {
     "not_logged_in",
+    "session_replaced",
     "storage_invalid",
     "storage_unavailable",
     "storage_uncertain",

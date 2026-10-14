@@ -85,6 +85,7 @@ SEEN_LIMIT = 2000  # message IDs remembered for notification de-duplication
 FATAL_KINDS = {
     "watcher_running",
     "not_logged_in",
+    "session_replaced",
     "binary_missing",
     "exec_failed",
     "storage_invalid",

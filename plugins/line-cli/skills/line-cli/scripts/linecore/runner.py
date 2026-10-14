@@ -187,6 +187,13 @@ _STDERR_RULES: tuple[tuple[str, str, bool, str | None], ...] = (
         "Names must match exactly (case-insensitive). Use `lineq.py resolve NAME` to search.",
     ),
     (
+        "invalidated or replaced by another client",
+        "session_replaced",
+        False,
+        "Another computer or Chrome LINE took over this account's single session. Do not log "
+        "in again without asking the user: logging in here signs that other device out.",
+    ),
+    (
         "run line login",
         "not_logged_in",
         False,

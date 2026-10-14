@@ -165,9 +165,12 @@ def test_windows_command_quotes_path_with_spaces_and_quotes():
     cmd = login.windows_command(r"C:\Users\O'Neil\My Apps\line.exe", ["--email", "a@b.com"])
     assert cmd[1:3] == ["-NoProfile", "-Command"]
     script = cmd[3]
-    assert script.startswith("Start-Process powershell -ArgumentList '-NoExit','-Command',")
+    assert script.startswith("Start-Process powershell -ArgumentList '-Command',")
+    assert "-NoExit" not in script  # the window must be able to close itself
+    assert "if ($LASTEXITCODE -eq 0)" in script and "Start-Sleep 3" in script
+    assert "Read-Host" in script  # failure keeps the window open
     assert "''C:\\Users\\O''''Neil\\My Apps\\line.exe''" in script  # quote doubled twice
-    assert script.endswith("''a@b.com'''")
+    assert "''a@b.com''; if (" in script
 
 
 def test_macos_command_escapes_for_applescript():
@@ -176,6 +179,8 @@ def test_macos_command_escapes_for_applescript():
     assert 'do script "' in cmd[-1]
     assert '\\"Bin\\"' in cmd[-1]  # AppleScript string escaping
     assert "My" in cmd[-1] and "'" in cmd[-1]  # shell quoting for the space
+    assert "&& { echo; echo 'Login complete" in cmd[-1] and "sleep 3" in cmd[-1]
+    assert "read -r _" in cmd[-1] and cmd[-1].endswith('; exit"')
 
 
 def test_linux_commands_in_documented_order(monkeypatch):
@@ -186,7 +191,8 @@ def test_linux_commands_in_documented_order(monkeypatch):
     gnome = cmds[0]
     assert gnome[1] == "--" and gnome[2:4] == ["sh", "-c"]
     assert gnome[-3:] == ["/home/u/.local/bin/line", "login", "--headless"]
-    assert "Press Enter" in gnome[4]  # window stays open so the user sees the result
+    assert "Press Enter" in gnome[4]  # failure keeps the window open
+    assert "&&" in gnome[4] and "sleep 3" in gnome[4] and "Login complete" in gnome[4]
 
 
 def test_default_launcher_refuses_over_ssh(monkeypatch):

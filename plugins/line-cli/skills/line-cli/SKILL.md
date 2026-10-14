@@ -47,7 +47,8 @@ choice, or a manual step), `4` (`lineq.py resolve` and `sync.py` only) no chat m
 Run this the first time, and whenever a command says `line` is missing or the user is not logged in.
 
 1. **Check.** `python "<SKILL_DIR>/scripts/setup.py" --check`. Look at `next_step`:
-   `ready` (go to everyday use), `install`, `fix_keyring`, `login`, or `retry_check`
+   `ready` (go to everyday use), `install`, `fix_keyring`, `login`, `session_replaced` (another device took the session: explain, and ask before logging in
+   again; see Errors), or `retry_check`
    (another process held the session; wait a few seconds and run it again).
 2. **Install** (when `line.found` is false). First explain in plain words and ask for consent:
    "To use LINE from here I need a small helper program called LINE CLI. I'll download it from its
@@ -57,7 +58,11 @@ Run this the first time, and whenever a command says `line` is missing or the us
    `python "<SKILL_DIR>/scripts/setup.py" --install --yes`.
    Without `--yes` it only prints a plan and exits 3, which is fine for showing the user what will
    happen. Results: `installed`, `already_installed`, `failed` (see `stage`), or
-   `needs_user_action`. On Linux the latter means the keyring packages are missing: show the
+   `needs_user_action`. After `installed`, tell the user what was verified, from the `verification`
+   object in the result: the installer script's SHA-256 against a pinned hash
+   (`installer_script_sha256`) and the program archive against the release's `SHA256SUMS.txt` by
+   the upstream installer (`release_archive`). Report only what those fields say; on Homebrew
+   nothing is pinned or verified by this skill. On Linux the latter means the keyring packages are missing: show the
    `sudo ...` command to the user and let them run it. Never run `sudo` yourself. A freshly
    installed `line` works immediately, even if the terminal PATH is not refreshed yet.
 3. **Log in** (when `logged_in` is false). Warn first: "Logging in will sign you out of LINE in the
@@ -66,12 +71,14 @@ Run this the first time, and whenever a command says `line` is missing or the us
    password." After a yes:
    `python "<SKILL_DIR>/scripts/login.py" --yes`
    (add `--email ADDRESS` for password login; `--headless` on a Linux server without a keyring).
-   It waits up to 5 minutes. Results: `logged_in`, `timeout`, `failed`, `already_logged_in`, or
+   The window closes by itself 3 seconds after a successful login; on failure it stays open with
+   the error. It waits up to 5 minutes. Results: `logged_in`, `timeout`, `failed`, `already_logged_in`, or
    `manual` (no window could be opened, for example over SSH: ask the user to run
    `line login` themselves, then re-run `setup.py --check`). Never ask for a password in chat and
    never run `line login` yourself.
 4. **Confirm.** `python "<SKILL_DIR>/scripts/lineq.py" run -- whoami --json` and greet the
-   user by the account name. Sessions renew themselves for about a week at a time, so normally the
+   user by the account name. LINE allows one such session per account, so only one computer can
+   be logged in with line-cli at a time. Sessions renew themselves for about a week at a time, so normally the
    user logs in once.
 
 If something is odd later, `setup.py --doctor` checks everything and gives a plain-language fix for
@@ -277,9 +284,12 @@ like spam to LINE and get the account restricted; say so if the list is long.
 
 On failure `error.kind` says what happened and `error.message` is safe to show in plain words.
 The common ones: `not_logged_in` (run the login step), `busy` (another `line` is using the session;
-reads retry automatically), `ambiguous_name` (resolve the name first), `attachment_expired`,
+reads retry automatically), `session_replaced` (see below), `ambiguous_name` (resolve the name first), `attachment_expired`,
 `attachment_too_large`, `storage_*` (needs the user: keyring or consent, see
-[references/errors.md](references/errors.md)). Report errors briefly and suggest the next step;
+[references/errors.md](references/errors.md)). `session_replaced` ("LINE session was invalidated or replaced by another client"): say plainly that
+another computer, or LINE in Chrome, took over the account's single session. **Ask the user before
+logging in again**: doing so here signs that other device out. Do not run `login.py` until they
+say yes. Report errors briefly and suggest the next step;
 do not paste raw output. If `setup.py --check` shows the installed `line` version differs from
 `documented_line_version`, mention that flags may have changed and prefer `line help`.
 

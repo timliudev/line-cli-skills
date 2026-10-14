@@ -57,7 +57,7 @@ npx skills add timliudev/line-cli-skills
    - Linux：官方 shell 安裝程式，安裝至 `~/.local/bin`。
    - 安裝程式與程式本身都固定為特定且已測試的發行版本（v0.4.0），並以檢查碼驗證（Homebrew 會安裝 tap 目前的發行版本，無法固定版本）。安裝後立即可用，不需要重新開啟終端機。
    - 在 Linux 桌面環境中，可能缺少系統金鑰圈（keyring）套件。Claude 會顯示 `sudo` 指令，由你自己執行；Claude 絕不會使用 `sudo`。
-2. **登入。** Claude 會先提醒你：**登入會讓你的 LINE Chrome 擴充功能登出**，因為 LINE 同一時間只允許一個此類工作階段。你同意後，會開啟一個新的終端機視窗。請用手機上的 LINE 掃描 QR Code，或在該視窗中輸入電子郵件與密碼登入。Claude 永遠不會看到你的密碼。它最多等待五分鐘，並以你的帳號名稱確認。若無法開啟任何視窗（例如透過 SSH），Claude 會給你一行指令，由你自己執行。
+2. **登入。** Claude 會先提醒你：**登入會讓你的 LINE Chrome 擴充功能登出**，因為 LINE 同一時間只允許一個此類工作階段。你同意後，會開啟一個新的終端機視窗。請用手機上的 LINE 掃描 QR Code，或在該視窗中輸入電子郵件與密碼登入。Claude 永遠不會看到你的密碼。登入視窗在成功後 3 秒會自動關閉；若失敗，視窗會保持開啟並顯示錯誤，按 Enter 才關閉。它最多等待五分鐘，並以你的帳號名稱確認。若無法開啟任何視窗（例如透過 SSH），Claude 會給你一行指令，由你自己執行。
 3. **完成。** 工作階段會儲存在作業系統的安全儲存區中，並大約每週自動更新，因此通常只需要登入一次。只有在 LINE 讓工作階段登出時才需要重新登入。
 
 非官方用戶端對你的帳號有風險（見 README）。建議使用備用帳號。
@@ -162,6 +162,7 @@ preset = "groq"                                       # api_key_env = "GROQ_API_
 | 登入視窗未能開啟 | 自行在終端機執行 `line login`，然後請 Claude 再檢查一次 |
 | Linux：金鑰圈缺少或被鎖定 | 安裝 Claude 顯示的套件（`libsecret-tools`、`gnome-keyring`）並解鎖金鑰圈；若是伺服器，請參閱 `references/setup.md` 中的無頭（headless）選項 |
 | "busy" | 另一個 `line` 指令正在執行；稍候片刻（讀取會自動重試） |
+| "LINE session was invalidated or replaced by another client" | 另一台電腦（或 Chrome 版 LINE）接手了你唯一的工作階段。Claude 會說明原因，並在這裡重新登入前先詢問你，因為那會讓另一台裝置登出 |
 | 影片有影格但沒有逐字稿 | 沒有可用的語音轉文字引擎：請 Claude 列出並設定一個 |
 | "needs ffmpeg" | 安裝 ffmpeg（見上文），然後再執行一次 |
 | 雲端服務處理長錄音時逐字稿失敗 | 超過 25 MB 的音訊尚未支援切割；請改用本機引擎 |

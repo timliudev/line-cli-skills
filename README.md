@@ -89,6 +89,7 @@ See the [user guide](docs/GUIDE.md) for details, configuration and troubleshooti
 - **Evals:** the 7 plugin evals ([docs/EVALS.md](docs/EVALS.md)) were run once each (3 runs per case) and all 7 passed. They check skill triggering and ask-before-writing behavior, not LINE itself.
 - **Known limit:** if upstream `chats --search` fails, name search covers active chats only (the user guide's troubleshooting table has this and two other fixes).
 - **Known limit:** @mentions are not supported (upstream has no mention support): "@name" is sent as plain text, not highlighted, and the person is not notified.
+- **Known limit:** one device at a time. LINE allows only one Chrome-style session per account, so logging in with line-cli on a second computer logs the first one out (it then fails with "LINE session was invalidated or replaced by another client"). Claude asks before logging in again, because that signs the other device out.
 
 See the [user guide](docs/GUIDE.md) and the [changelog](CHANGELOG.md).
 

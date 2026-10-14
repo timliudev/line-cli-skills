@@ -57,7 +57,7 @@ When you first ask about LINE, Claude runs a check and then walks you through wh
    - Linux: the official shell installer, to `~/.local/bin`.
    - The installer script and the program are fixed to a specific tested release (v0.4.0) and verified by checksum (Homebrew installs the tap's current release instead, so it cannot be pinned). It works right away, without reopening your terminal.
    - On Linux desktops the system keyring packages may be missing. Claude shows you the `sudo` command and you run it yourself; Claude never uses `sudo`.
-2. **Log in.** Claude warns you first: **logging in signs you out of the LINE Chrome extension**, because LINE allows one such session at a time. After your yes, a new terminal window opens. Scan the QR code with LINE on your phone, or sign in with email and password typed into that window. Claude never sees your password. It waits up to five minutes and confirms with your account name. If no window can be opened (for example over SSH), Claude gives you the one command to run yourself.
+2. **Log in.** Claude warns you first: **logging in signs you out of the LINE Chrome extension**, because LINE allows one such session at a time. After your yes, a new terminal window opens. Scan the QR code with LINE on your phone, or sign in with email and password typed into that window. Claude never sees your password. The login window closes by itself 3 seconds after success; if it fails it stays open with the error until you press Enter. It waits up to five minutes and confirms with your account name. If no window can be opened (for example over SSH), Claude gives you the one command to run yourself.
 3. **Done.** The session is stored in your operating system's secure storage and renews itself, about every week, so you normally log in only once. Logging in again is needed only if LINE signs the session out.
 
 An unofficial client carries a risk to your account (see the README). Using a spare account is wise.
@@ -162,6 +162,7 @@ Ask Claude to "run the LINE doctor". It runs `setup.py --doctor` from the plugin
 | Login window did not open | Run `line login` yourself in a terminal, then ask Claude to check again |
 | Linux: keyring missing or locked | Install the packages Claude shows (`libsecret-tools`, `gnome-keyring`) and unlock the keyring; for servers see the headless option in `references/setup.md` |
 | "busy" | Another `line` command is running; wait a moment (reads retry automatically) |
+| "LINE session was invalidated or replaced by another client" | Another computer (or LINE in Chrome) took over your single session. Claude explains this and asks before logging in again here, because that signs the other device out |
 | Video has frames but no transcript | No speech-to-text engine is ready: ask Claude to list and set one up |
 | "needs ffmpeg" | Install ffmpeg (see above), then run again |
 | Transcript failed on a long recording with a cloud service | Audio over 25 MB is not split yet; use a local engine |

@@ -89,6 +89,7 @@ npx skills add timliudev/line-cli-skills
 - **Evals：** 7 個 plugin eval（[docs/EVALS.md](docs/EVALS.md)）各執行過一次（每個案例跑 3 次），7 個全數通過。它們檢查的是 skill 的觸發與寫入前先詢問的行為，並不涉及 LINE 本身。
 - **已知限制：** 上游 `chats --search` 失敗時，名稱搜尋只涵蓋活躍聊天室（使用指南的疑難排解表另有兩項相關修正）。
 - **已知限制：** 不支援 @提及（上游沒有提及功能）：「@名字」會以純文字送出，不會標示，也不會通知對方。
+- **已知限制：** 一次只能一台裝置。LINE 每個帳號只允許一個 Chrome 類型的工作階段，所以在第二台電腦用 line-cli 登入，第一台就會被登出（之後會出現「LINE session was invalidated or replaced by another client」）。Claude 重新登入前會先詢問你，因為那會讓另一台裝置登出。
 
 詳見[使用指南](docs/GUIDE.zh-TW.md)與[變更紀錄](CHANGELOG.md)。
 

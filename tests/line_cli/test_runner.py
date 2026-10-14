@@ -92,6 +92,12 @@ def test_find_line_known_paths_unix(tmp_path):
         ),
         (1, "line: no saved LINE session; run line login", "not_logged_in", False),
         (1, "line: LINE session was logged out; run line login", "not_logged_in", False),
+        (
+            1,
+            "line: LINE session was invalidated or replaced by another client; run line login",
+            "session_replaced",
+            False,
+        ),
         (65, "line: saved Letter Sealing keys are missing; run line login", "not_logged_in", False),
         (75, "line: another line command is using the session; retry", "busy", True),
         (75, "", "busy", True),
