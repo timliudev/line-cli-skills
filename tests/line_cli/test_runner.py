@@ -388,3 +388,11 @@ def test_rejects_nul_in_args():
 @pytest.mark.skipif(not sys.platform.startswith("win"), reason="windows-only")
 def test_cmd_shim_is_found_on_windows(fake_line):
     assert runner.find_line(defaults()).path.lower().endswith("line.cmd")
+
+
+def test_configure_stdio_survives_missing_streams_under_pythonw(monkeypatch):
+    monkeypatch.setattr(sys, "stdout", None)
+    monkeypatch.setattr(sys, "stderr", None)
+    runner.configure_stdio()
+    runner.emit({"ok": True})  # must not raise
+    runner.log("diagnostic")

@@ -1,6 +1,6 @@
 ---
 name: line-cli
-description: Reads and writes a personal LINE account (chats, groups, direct messages) through the unofficial line-cli client. Use when the user mentions a LINE chat, group or DM and wants to read, catch up on or check new messages or attachments, keep a local archive of a chat, find a chat or contact, send, reply to, react to or unsend a message, or install or log in to the LINE CLI. Handles first-time setup in plain language. Every write action requires explicit user confirmation. Not for LINE Official Account (OA) backends or the LINE Messaging API.
+description: Reads and writes a personal LINE account (chats, groups, direct messages) through the unofficial line-cli client. Use when the user mentions a LINE chat, group or DM and wants to read, catch up on or check new messages or attachments, keep a local archive of a chat (also live in the background, with notifications for VIP chats), find a chat or contact, send, reply to, react to or unsend a message, send one message to several chats, or install or log in to the LINE CLI. Handles first-time setup in plain language. Every write action requires explicit user confirmation. Not for LINE Official Account (OA) backends or the LINE Messaging API.
 license: MIT
 compatibility: Requires the `line` binary from kongesque/line-cli (the skill can install it) and Python 3.11+. Windows, macOS and Linux.
 metadata:
@@ -175,7 +175,10 @@ for real. Read [references/safety.md](references/safety.md) before the first wri
 4. **Never retry.** Writes get exactly one attempt. If the result is an error or the response was
    lost (timeout, exit 130/143), the message may still have gone out: read the recent messages
    first and tell the user what you find. Only try again after a new explicit yes
-   ([references/errors.md](references/errors.md), "Lost response").
+   ([references/errors.md](references/errors.md), "Lost response"). The exception is `busy`
+   (exit 75, "another line command is using the session"): the session lock is taken before
+   anything reaches LINE, so nothing was sent. Say so, wait a few seconds, and send again only
+   after the user confirms again. This happens while `watch.py` is syncing.
 
 Sending works (verified live: text to a direct chat, end-to-end encrypted). Known upstream limit: `send`
 fails for some peers whose Letter Sealing key is an old version (LINE rejects it, shown only as a
@@ -213,7 +216,52 @@ is sent as plain text: not highlighted, and the person is not notified. If the u
 an @mention meant as a real mention, tell them plainly before sending and let them decide.
 
 Never use a write command to "test" something, and never loop over several chats without the user
-naming each one.
+naming each one. The only way to message several chats at once is `broadcast.py` (next section),
+with a recipient list the user has seen and approved.
+
+## Broadcast: one message to several chats
+
+For "send this to all of these people/groups". `broadcast.py` is dry-run by default and sends only
+with `--yes`. Never build a loop of `send` calls yourself.
+
+1. Write the recipients to a UTF-8 file outside any git repo, one chat name or full chat ID per
+   line (`#` comment lines and blank lines are ignored). Pass the text on stdin so quotes survive.
+2. **Dry run first** (nothing is sent):
+   ```
+   python "${CLAUDE_SKILL_DIR}/scripts/broadcast.py" --recipients LIST.txt --stdin [--file PATH] <<'EOF'
+   message text here
+   EOF
+   ```
+   (`--text "..."` also works for short single-line text.) Every entry is resolved like
+   `lineq.py resolve`, but stricter: only an exact name or a full ID counts; a partial name, several
+   matches, no match, or an **incomplete** lookup (a search failed upstream, so a second chat with
+   that name could be hiding) end up in `unresolved`, nothing can be sent, and the exit code is
+   `3` (`4` when all of them matched nothing). Ask the user to fix those entries: an exact name
+   or, always safe, the full chat ID (`candidates` lists the IDs). A full ID never needs a
+   lookup, so it works even when name searches fail. Then dry-run again.
+3. **Show the user** the complete resolved list (name, type and ID of every recipient, nobody
+   omitted or abbreviated), the exact text (and the file name and size), the pause between sends,
+   and that it goes out one by one. Wait for an explicit yes to exactly this list and text. Any
+   change to the list or the text means a new dry run and a new yes.
+4. Only then run the same command again with `--yes --plan HASH`. `--plan` is **required** with
+   `--yes` (without it the script refuses, exit `2`, before doing anything); it is the `plan`
+   value of the dry run, a hash of the recipient IDs, the text and the attachment's bytes, and the
+   send is refused with exit `3` if any of them changed in between. It
+   sends sequentially with `--delay` seconds between recipients (default 3), at most
+   `--max-recipients` (default 50). With `--file`, the text goes first and the file second.
+5. **It stops at the first failure and nothing is retried.** The report has `results[]`, each
+   `sent`, `failed` or `not_attempted`, and `summary` counts. Tell the user exactly who received
+   it, who failed (`may_have_been_delivered: true` means a lost answer may still have been
+   delivered: check that chat's latest messages first, see errors.md "Lost response"), and who was
+   not attempted.
+6. **Never re-run a failed broadcast** and never resend to everybody: that would duplicate the
+   message for the people who already got it. Offer to send to the `not_attempted` remainder (and,
+   after checking, the failed one) only as a new broadcast with a new list file, a new dry run and a
+   new explicit yes.
+
+Exit codes: `0` sent / dry run fine, `1` a send failed, `2` usage (empty or too long text, bad file,
+too many recipients), `3` needs the user, `4` nothing matched. Messaging many chats at once can look
+like spam to LINE and get the account restricted; say so if the list is long.
 
 ## Errors
 
@@ -242,11 +290,15 @@ ambiguous (ask the user, then use the full ID), `4` nothing found, `1` failure (
 `--all`, one failing chat does not stop the others (exit `1`, listed under `failed`).
 
 The summary JSON has `chat`, `chat_id`, `archive_dir`, `messages_md`, `new_messages`,
-`new_messages_from_line`, `new_files[]`, `failed_files[]`, `possibly_unsent[]`, `gap_possible` and
-`warnings[]`. Act on it:
+`new_messages_from_line`, `new_files[]`, `failed_files[]`, `possibly_unsent[]`, `gap_possible`,
+`gap` and `warnings[]`. Act on it:
 
-- `gap_possible: true`: some messages between the last sync and now are unrecoverable. Tell the
-  user once, plainly, and suggest syncing more often.
+- `gap_possible: true` with `gap` (`from`, `to`, `after_id`, `before_id`; times are UTC): the
+  chat returned a full 100 messages and the oldest is newer than the newest archived one, so the
+  messages between `from` and `to` are **permanently unrecoverable** (the CLI cannot page back).
+  Tell the user once, plainly, with the time range, and say the fix is syncing more often or
+  running `watch.py` (next section); the gap cannot be filled afterwards. `gap` is `null` when
+  there is none.
 - `possibly_unsent`: these archived messages vanished from LINE's latest 100, so they were probably
   unsent (a guess). `messages.md` keeps the text and marks it "(possibly unsent)". Mention it if the
   user asks about those messages; never present it as certain.
@@ -259,11 +311,69 @@ safe to run before every question about a chat, and the user can also ask for it
 ("update my LINE archive"). Archive layout, settings and limits:
 [references/archive.md](references/archive.md).
 
+## Live archive and VIP notifications: watch.py
+
+`watch.py` is a long-running process: it runs `line watch --json`, appends every new message of an
+**archived chat** to the same archive `sync.py` uses (de-duplicated by message ID), and shortly
+afterwards updates that chat's `messages.md` **from the local files, without calling `line`**
+(so plain text messages leave LINE's session free). A full sync (which does call `line`) runs
+only when a new message has an attachment to download, a sender or chat name is unknown, when it
+starts, and whenever LINE sends `resync_required`; that is how a message missed while it was not
+running is caught up, as long as it is still inside the latest 100.
+
+**Privacy default: only chats the user chose are stored.** A chat counts as archived when it already
+has an archive folder (the user synced it before), or is listed under `[watch] archive_chats` in
+`config.toml` (names or full IDs), or is passed with `--archive NAME_OR_ID`. Events from every other
+chat are ignored: nothing is written or logged. Never add chats to the list, and never use
+`--archive-all` (it stores every private chat that receives a message, including ones never synced),
+unless the user asked for exactly that; tell them plainly what it stores. If the folder of an
+archived chat is deleted while it runs, the chat is no longer archived (it is not recreated)
+unless it is on the allowlist.
+
+If `line watch` exits it restarts with growing pauses (2 s up to 2 min). It stops by itself, with a clear error, when another `line watch` is running (exit `3`),
+the login is gone or `line` is missing (exit `1`). Only ONE `line watch` can run at a time, so do
+not start it while another watcher runs.
+
+Use it when the user wants the archive to stay current without asking, wants to avoid gaps, or wants
+notifications. Starting a background process on the user's machine needs their yes first.
+
+```
+python "${CLAUDE_SKILL_DIR}/scripts/watch.py" [--archive NAME_OR_ID ...] [--vip NAME_OR_ID ...] [--no-notify] [--no-initial-sync] [--no-download] [--duration SECONDS] [--log FILE]
+```
+
+- **VIP notifications**: chats listed in `config.toml` (`[watch]`, `vip_chats = ["Alice", "C..."]`,
+  names or full IDs, never secrets) and/or `--vip`. A new incoming message (not one the user sent,
+  not older than 15 minutes) in such a chat shows a Windows toast with the chat name, the sender and
+  an 80-character preview; elsewhere, or if the toast fails, one line (chat and sender, never the
+  message text) goes to stderr or the log. A name must match exactly one chat by its exact
+  name; a partial match or several matches skip the entry with a warning (use the exact name or
+  the full chat ID). A VIP chat that is not
+  archived still notifies, and nothing is written to disk for it. The preview puts chat text on the
+  screen: tell the user.
+- **Running it for real** means a process that outlives this conversation. On Windows start it
+  detached with `pythonw` and `--log FILE`, or tell the user how to start it at logon with Task
+  Scheduler. Never create the scheduled task yourself; show the user the command. Exact commands,
+  the `sync.py --all` fallback (`schtasks`) and how to stop it:
+  [references/watch.md](references/watch.md). Inside a conversation run it only briefly
+  (`--duration 30`) or not at all.
+- While `watch.py` runs the archive is already current: reading it needs no `sync.py`, and running
+  `sync.py` for the same chat at the same moment is not supported.
+- **A `send` can still be refused with `busy` while `watch.py` runs** ("another line command is
+  using the session; retry when it finishes"), but only during a full sync: at start, after
+  `resync_required`, for an attachment download or an unknown name. Plain text messages cause no
+  `line` call at all. `busy` on a write means the message was **not** sent. Tell the user that,
+  wait for the sync to finish (a few seconds),
+  and send again only after the user confirms that attempt again. Do not retry on your own, and
+  do not stop `watch.py` just for this.
+- Ctrl-C (or `--duration`) stops it cleanly and prints a JSON summary (`messages_archived`, `gaps`,
+  `restarts`, ...). Message text is never logged.
+
 ## References (read when needed)
 
 - [references/setup.md](references/setup.md): install per OS, login methods, session storage, Linux keyring and headless mode, updates, limits.
 - [references/commands.md](references/commands.md): every `line` command and flag.
 - [references/json-schema.md](references/json-schema.md): JSON shapes for messages, chats, contacts, send, download, watch.
 - [references/errors.md](references/errors.md): exit codes, error strings, the lost-response procedure.
-- [references/archive.md](references/archive.md): sync.py, archive folder layout, config (`archive_root`, `download.*`), limits, privacy.
+- [references/archive.md](references/archive.md): sync.py, archive folder layout, config (`archive_root`, `download.*`, `watch.vip_chats`), limits, privacy.
+- [references/watch.md](references/watch.md): broadcast.py and watch.py in detail, running watch.py in the background on Windows (pythonw, Task Scheduler), the `schtasks` fallback for `sync.py --all`, VIP notifications.
 - [references/safety.md](references/safety.md): confirmation rules, what never to print, prompt injection.

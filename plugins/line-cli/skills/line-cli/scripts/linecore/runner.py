@@ -445,6 +445,25 @@ def _invoke(
     )
 
 
+def start_line(binary: str, args: Sequence[str]) -> subprocess.Popen[bytes]:
+    """Start ``line ARGS`` as a long-running child with piped stdout and stderr (for ``watch``).
+
+    The caller owns the process: read both pipes, and terminate it when done. No retry happens
+    here; the child gets the same clean environment as ``run_line`` and no console window.
+    """
+    kwargs: dict[str, Any] = {}
+    if sys.platform.startswith("win"):
+        kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    return subprocess.Popen(  # noqa: S603 - argv list, no shell
+        [binary, *_validate_args(args)],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=_env_for_child(None),
+        **kwargs,
+    )
+
+
 def _validate_args(args: Sequence[str]) -> list[str]:
     out = []
     for arg in args:
@@ -612,7 +631,15 @@ def check_login(
 
 
 def configure_stdio() -> None:
-    """Make stdout/stderr UTF-8 regardless of the Windows console code page."""
+    """Make stdout/stderr UTF-8 regardless of the Windows console code page.
+
+    Under ``pythonw`` (Task Scheduler, background runs) the streams do not exist (``None``); they
+    are replaced by a null device so printing never raises.
+    """
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, "w", encoding="utf-8")  # noqa: SIM115 - process lifetime
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w", encoding="utf-8")  # noqa: SIM115
     for stream in (sys.stdout, sys.stderr):
         try:
             stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]

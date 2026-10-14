@@ -5,6 +5,58 @@ All notable changes to this project are documented here. Format based on
 
 ## [Unreleased]
 
+### Added
+- `scripts/broadcast.py`: send one message (text via `--text`/`--stdin`, optionally a `--file`) to a
+  list of chats (one name or full chat ID per line, `#` comments and blank lines ignored). Dry run by
+  default: every entry is resolved (only an exact name from a complete lookup or a full ID counts; partial, ambiguous,
+  `incomplete` (a search failed, so a second chat of that name may be hiding: use the full chat ID,
+  which always works) and unmatched entries are listed under `unresolved` and the exit code is not 0, nothing is sent) and
+  the JSON shows the resolved recipients, the exact text and a `plan` hash (recipient IDs, text and
+  the SHA-256 of an attachment's bytes). `--yes` requires `--plan HASH` (exit 2 without it) and is
+  refused if the list, text or file changed; it sends sequentially with `--delay` seconds
+  between recipients (default 3, at most `--max-recipients`, default 50), stops at the first
+  failure, never retries, and reports every recipient as `sent`, `failed` or `not_attempted`
+  (a failed one says whether it may still have been delivered). SKILL.md requires a dry run, showing
+  the user the full list and text, an explicit yes, and never re-running a failed broadcast.
+- `scripts/watch.py`: long-running live archiver. Runs `line watch --json`, appends each `message`
+  event of an archived chat to the same archive as `sync.py` (de-duplicated by message ID), then
+  syncs that chat (attachments, `messages.md`). Syncs the archived chats at start and on
+  `resync_required` (catch-up). **Privacy default:** only chats that already have an archive folder,
+  or are listed under `[watch] archive_chats` / passed with `--archive NAME_OR_ID`, are archived;
+  events of every other chat are ignored (nothing written, nothing logged, counted as
+  `ignored_messages`). `--archive-all` is an explicit opt-in that archives every chat.
+  **No `line` call for plain text:** a new message is appended from the event and the chat's
+  `messages.md` is re-rendered from the local files (names cache, downloaded files, emoji cache), so
+  LINE's session lock stays free for `send`. The full sync runs only for an attachment to download,
+  an unknown sender or chat name (once each), at start and on `resync_required`, with a 2 s pause
+  between chats. Default `--settle` 15 s, at most 2 min while a chat stays busy. The set of archive
+  folders is re-read at most every 5 s (a folder deleted while running is not recreated unless the
+  chat is on the allowlist), and sender names are remembered in memory. Restarts `line watch` with exponential backoff (2 s up to 2 min) and logs to stderr or
+  `--log FILE`; exits with a clear error (exit 3) when another `line watch` already runs, and
+  stops on a lost login or missing `line`. Ctrl-C / SIGTERM / `--duration` stop it cleanly with a JSON
+  summary. New `linecore.runner.start_line` helper.
+- VIP notifications: new config table `[watch]` with `vip_chats` and `archive_chats` (chat names or
+  full IDs, no secrets) and `--vip` / `--archive` for `watch.py`. VIP chats notify even when not
+  archived, and nothing is written to disk for them then. A fresh incoming message (not sent by you, not older than
+  15 minutes) in a VIP chat shows a Windows toast (PowerShell, stdlib only) with chat, sender and a
+  short preview; other systems, or a failed toast, get one stderr line with the chat and sender but
+  never the message text. `--no-notify` disables it. VIP and archive entries must be exact names
+  or full IDs (a partial-name match is refused with a warning).
+- `references/watch.md`: broadcast and watch in detail, running `watch.py` on Windows with `pythonw`
+  or Task Scheduler at logon, a scheduled `sync.py --all` fallback with `schtasks` (commands
+  are documented only; no task is created), and the note that a `send` can be refused with `busy`
+  while `watch.py` syncs: that proves nothing was sent; tell the user, wait, and send again only
+  after they confirm (also in SKILL.md and `references/safety.md`).
+
+### Changed
+- `sync.py` summary: new `gap` field (`null`, or `after_id`, `before_id`, `from`, `to` as UTC times)
+  next to `gap_possible`. The warning now names the unrecoverable time range and the fix (sync more
+  often or run `watch.py`). Additive; `state.json` is unchanged.
+- All scripts tolerate missing stdout/stderr (`pythonw`, Task Scheduler): `runner.configure_stdio`
+  replaces them with a null device.
+- Docs: SKILL.md, `references/archive.md`, `references/safety.md`, README and GUIDE (4 languages;
+  new GUIDE section "Broadcast, live archive and notifications").
+
 ## [0.1.2] - 2026-10-14
 
 ### Added

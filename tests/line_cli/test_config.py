@@ -155,3 +155,33 @@ def test_render_quiet_gap_days_default_custom_and_invalid(tmp_path):
     write_config(tmp_path / "x", "[render]\nquiet_gap_days = -1\n")
     with pytest.raises(cfg.ConfigError):
         cfg.load_config(env, "linux")
+
+
+def test_watch_vip_chats_default_valid_and_invalid(tmp_path):
+    env = {"XDG_CONFIG_HOME": str(tmp_path / "x"), "HOME": str(tmp_path)}
+    assert cfg.load_config(env, "linux").watch_vip_chats == ()
+    write_config(tmp_path / "x", '[watch]\nvip_chats = [" Alice ", "Project Team", "Alice"]\n')
+    conf = cfg.load_config(env, "linux")
+    assert conf.watch_vip_chats == ("Alice", "Project Team")  # trimmed, de-duplicated
+    assert conf.to_dict()["watch"] == {"vip_chats": ["Alice", "Project Team"], "archive_chats": []}
+    for bad in ('vip_chats = "Alice"', "vip_chats = [1]", 'vip_chats = [""]'):
+        write_config(tmp_path / "x", f"[watch]\n{bad}\n")
+        with pytest.raises(cfg.ConfigError, match="vip_chats"):
+            cfg.load_config(env, "linux")
+    write_config(tmp_path / "x", "watch = 1\n")
+    with pytest.raises(cfg.ConfigError, match="watch"):
+        cfg.load_config(env, "linux")
+    write_config(tmp_path / "x", "[watch]\nsound = true\n")
+    assert any("watch.sound" in w for w in cfg.load_config(env, "linux").warnings)
+
+
+def test_watch_archive_chats_is_an_allowlist_of_names_or_ids(tmp_path):
+    env = {"XDG_CONFIG_HOME": str(tmp_path / "x"), "HOME": str(tmp_path)}
+    assert cfg.load_config(env, "linux").watch_archive_chats == ()  # nothing allowed by default
+    write_config(tmp_path / "x", '[watch]\narchive_chats = ["Family", "C" , "Family"]\n')
+    conf = cfg.load_config(env, "linux")
+    assert conf.watch_archive_chats == ("Family", "C")
+    assert conf.to_dict()["watch"]["archive_chats"] == ["Family", "C"]
+    write_config(tmp_path / "x", "[watch]\narchive_chats = [3]\n")
+    with pytest.raises(cfg.ConfigError, match="archive_chats"):
+        cfg.load_config(env, "linux")

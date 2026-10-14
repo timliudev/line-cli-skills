@@ -30,6 +30,7 @@ Permission does not carry over to later actions.
 | Command | Why it needs confirmation | What to show before asking |
 | --- | --- | --- |
 | `line send` (`--text`, `--stdin`, `--file`) | Delivers a message to other people. Cannot be recalled by this CLI. | Chat name and ID, the full text (or a short summary plus length if very long), or the file name and size. Note `--reply-to` if used. |
+| `broadcast.py --yes` (many `line send` calls) | Delivers the same message to every listed chat, one after another. A failed run that is repeated duplicates the message for everyone who already got it. | The dry run's complete resolved list (name, type, ID of every recipient), the exact text (or file name and size) and the pause between sends. Run `--yes --plan HASH` (the plan is required) only after an explicit yes to exactly that; never re-run a failed broadcast; offer the `not_attempted` remainder as a new, separately confirmed broadcast. See [watch.md](watch.md). |
 | `line react` (add or `--remove`) | Visible to the other members of the chat. | Chat name and ID, target message (sender, a short excerpt, the message ID), and the reaction (or removal). |
 | `line unsend` | Removes a message for everyone. Irreversible. The CLI does not ask for confirmation when called with flags (only in interactive mode, `actions.go:74-82`). | Chat name and ID, the message ID and its excerpt, and that it will be removed for all members. |
 | `line login` (any method) | Replaces the saved session. LINE allows one Chrome-style session at a time, so this can sign out the LINE Chrome extension or another Chrome-style client (`internal/cli/login.go:88-90`). | That the existing session will be replaced, and which method (QR or `--email`). Login needs a human at a terminal anyway. |
@@ -73,7 +74,9 @@ Read-only or local-only commands (`whoami`, `contacts`, `chats`, `messages`, `do
 - Never loop on a write. Never retry a write because a read or a watch reconnected.
 - A busy error (exit 75) on a write means the session lock was not acquired, and the write path takes
   that lock before any LINE call (`internal/cli/messages.go:157`, `actions.go:94`). Nothing was sent, but
-  report it and ask the user before retrying anyway.
+  report it and ask the user before retrying anyway. It can happen while `watch.py` runs, during
+  its full syncs (plain text messages need no `line` call): tell the user the message was NOT sent, let the sync finish,
+  and send again only after they confirm that attempt again (never silently, never in a loop).
 
 ## Never print or store
 

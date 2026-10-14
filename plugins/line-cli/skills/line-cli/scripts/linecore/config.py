@@ -27,10 +27,11 @@ ARCHIVE_ENV = "LINE_SKILL_ARCHIVE"
 
 DOWNLOAD_TYPES = ("image", "video", "audio", "file")
 DEFAULT_MAX_BYTES = 20 * 1024 * 1024  # 20971520, upstream's attachment cap
-KNOWN_KEYS = {"line_path", "archive_root", "download", "render"}
+KNOWN_KEYS = {"line_path", "archive_root", "download", "render", "watch"}
 KNOWN_RENDER_KEYS = {"quiet_gap_days"}
 DEFAULT_QUIET_GAP_DAYS = 3
 KNOWN_DOWNLOAD_KEYS = {"types", "max_bytes", "line_emoji"}
+KNOWN_WATCH_KEYS = {"vip_chats", "archive_chats"}
 
 
 class ConfigError(ValueError):
@@ -104,6 +105,8 @@ class Config:
     warnings: tuple[str, ...] = field(default_factory=tuple)
     render_quiet_gap_days: int = DEFAULT_QUIET_GAP_DAYS
     download_line_emoji: bool = True
+    watch_vip_chats: tuple[str, ...] = ()  # chat names or full IDs; never secrets
+    watch_archive_chats: tuple[str, ...] = ()  # chats watch.py may archive (besides archived ones)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -118,6 +121,10 @@ class Config:
                 "line_emoji": self.download_line_emoji,
             },
             "render": {"quiet_gap_days": self.render_quiet_gap_days},
+            "watch": {
+                "vip_chats": list(self.watch_vip_chats),
+                "archive_chats": list(self.watch_archive_chats),
+            },
             "warnings": list(self.warnings),
         }
 
@@ -197,6 +204,20 @@ def load_config(env: Mapping[str, str] | None = None, os_name: str | None = None
     if isinstance(quiet, bool) or not isinstance(quiet, int) or quiet < 0:
         raise ConfigError(f"{cfg_path}: `render.quiet_gap_days` must be an integer >= 0")
 
+    watch = raw.get("watch", {})
+    if not isinstance(watch, dict):
+        raise ConfigError(f"{cfg_path}: `watch` must be a table")
+    for key in sorted(set(watch) - KNOWN_WATCH_KEYS):
+        warnings.append(f"unknown key `watch.{key}` in {cfg_path} (ignored)")
+    chat_lists: dict[str, tuple[str, ...]] = {}
+    for key in ("vip_chats", "archive_chats"):
+        raw_list = watch.get(key, [])
+        if not isinstance(raw_list, list) or not all(
+            isinstance(v, str) and v.strip() for v in raw_list
+        ):
+            raise ConfigError(f"{cfg_path}: `watch.{key}` must be a list of non-empty strings")
+        chat_lists[key] = tuple(dict.fromkeys(v.strip() for v in raw_list))  # de-duplicate
+
     env_archive = (env.get(ARCHIVE_ENV) or "").strip()
     cfg_archive = _str_key(raw, "archive_root", cfg_path)
     if env_archive:
@@ -217,6 +238,8 @@ def load_config(env: Mapping[str, str] | None = None, os_name: str | None = None
         warnings=tuple(warnings),
         render_quiet_gap_days=quiet,
         download_line_emoji=line_emoji,
+        watch_vip_chats=chat_lists["vip_chats"],
+        watch_archive_chats=chat_lists["archive_chats"],
     )
 
 

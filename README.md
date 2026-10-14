@@ -22,6 +22,7 @@ Two independent Claude Code plugins:
   - Chat names are resolved to IDs; ambiguous names are put to you, never guessed.
   - Local archive: `sync.py` saves each chat's messages (a `.jsonl` record plus a readable `.md`) in a folder on your machine and downloads new attachments right away, so Claude can tell you what is new and your history is kept from the day you start syncing, not just LINE's latest 100 messages.
   - Who replied or reacted: `thread.py` lists the replies and reactions to one archived message, and `emoji.py` keeps short labels for the LINE emoji reactions that sync caches once per emoji (shared across chats).
+  - Broadcast, live archive and VIP alerts: `broadcast.py` sends one message to many chats (dry run first, sends only after your yes, stops at the first failure, never retries); `watch.py` keeps the archive of the chats you chose live in the background (other chats are ignored), catches up after missed events and shows a Windows notification for new messages in your VIP chats; a sync now reports a permanent `gap` when more than 100 messages arrived between two syncs.
 - **media-digest** - turn videos and audio into keyframes plus a timestamped transcript Claude can read. Works with any local file, not only LINE.
   - Videos: keyframes by scene detection (with timestamps) and a transcript, merged into one `digest.md` timeline.
   - Audio and voice messages: transcript with timestamps.

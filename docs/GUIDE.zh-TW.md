@@ -75,6 +75,13 @@
 
 Claude 會替你從 plugin 的 `skills/media-digest/scripts` 資料夾執行 `digest.py FILE... --out OUTDIR`。常用選項：`--lang zh`（語音語言，預設自動偵測）、`--max-frames 24`、`--no-asr`（僅影格）、`--force`（重新處理）。輸出為 `OUTDIR/digest.md` 與 `digest.json`。結果會被快取；沒有逐字稿的檔案，在安裝引擎後會自動重試。
 
+## 群發、即時存檔與通知
+
+- **一次傳給多個聊天室。** 例如說「把這則公告傳給名單上的每個人」。Claude 會寫出名單並先**試跑**（逐一解析名稱、不會送出任何東西），把每個收件人和完整文字給你看。只有「名稱完全相符」或完整 ID 才算數；部分相符或有多個同名者會交給你決定，絕不猜；LINE 的名稱搜尋無法完整確認時，Claude 會改要求完整聊天室 ID。你明確說「好」之後才逐一送出，每則之間停幾秒。遇到第一個失敗就停、絕不重試，並告訴你誰收到了、誰失敗了、誰還沒送。失敗的群發不會自動重跑（已收到的人會收到第二次）；只有你開口，Claude 才會對其餘的人再送。一次傳給很多聊天室可能讓帳號被限制，名單請保持精簡。
+- **即時存檔。** `watch.py` 在背景讓存檔保持最新：監聽新訊息、一到就存（附件幾秒後跟上）、LINE 回報漏掉事件時補同步、連線中斷時自動重啟。同一時間只能有一個 `line watch`；若已有別的在跑，`watch.py` 會直接說明並停止。按 Ctrl-C 可乾淨結束。在 Windows 上可用 `pythonw` 執行，或交給「工作排程器」在登入時啟動；指令寫在 skill 的 `references/watch.md`，Claude 只會把指令給你看，不會自己建立排程。預設只存檔「已有存檔資料夾」的聊天室，或你在 `[watch] archive_chats` 列出（或用 `--archive` 指定）的聊天室；其他聊天室（例如你從未同步過的私人聊天）的訊息會被忽略，不儲存也不寫入紀錄。`--archive-all` 會存下所有聊天室，預設關閉，除非你明確要求。純文字訊息會直接存檔、完全不聯絡 LINE，所以不影響你傳訊；只有在 `watch.py` 做完整同步時（啟動、補同步、下載附件或查詢不明名稱），傳送才可能被拒絕並顯示「another line command is using the session」：這表示訊息**沒有**送出；稍等片刻，經你確認後 Claude 才會再送一次。
+- **缺口（gap）。** LINE 只回傳最新 100 則訊息，這個客戶端也無法往前翻頁，所以兩次同步之間若來了超過 100 則，中間那些就永遠找不回來。同步現在會告訴你缺口的時間範圍（`gap`）。避免的方法是更常同步，或執行 `watch.py`。不想常駐程式時的替代方案：用 Windows 工作排程器每 15 分鐘執行一次 `sync.py --all`（`schtasks` 指令見 `references/watch.md`）。
+- **VIP 通知。** 在 `config.toml` 的 `[watch] vip_chats` 列出重要聊天室（名稱或完整聊天室 ID），或對 `watch.py` 加 `--vip`。執行期間，這些聊天室的新來訊息會跳出 Windows 通知，內容有聊天室、寄件人和一小段預覽（其他系統或通知失敗時改寫一行紀錄，內容只有聊天室與寄件人，絕不含訊息文字）。你自己傳的訊息和過舊的積壓訊息不會觸發。未存檔的 VIP 聊天室仍會通知，但不會在磁碟寫入任何東西。預覽會把聊天內容顯示在螢幕上。
+
 ## 設定
 
 所有功能不需設定即可運作。有兩個選用的 `config.toml` 檔（各 skill 的說明放在 `references/` 中）。機密值永遠不會存在這些檔案中，只記錄環境變數的**名稱**。
@@ -87,6 +94,8 @@ Claude 會替你從 plugin 的 `skills/media-digest/scripts` 資料夾執行 `di
 | `archive_root` | 存檔的位置（也可用環境變數 `LINE_SKILL_ARCHIVE` 設定，且優先採用）。預設：`%LOCALAPPDATA%\line-skill\archive`（Windows）、`~/Library/Application Support/line-skill/archive`（macOS）、`~/.local/share/line-skill/archive`（Linux） |
 | `download.types`, `download.max_bytes` | 自動下載哪些附件類型（`image`、`video`、`audio`、`file`），以及大小上限（單位為位元組，預設 20 MiB，也是此用戶端能抓取的上限），以及 `download.line_emoji`（預設 `true`，每個 LINE 表情回應圖只存一次） |
 | `render.quiet_gap_days` | `messages.md` 中，相鄰兩則訊息相隔超過這個天數時，插入一行「no messages for X days」（預設 3；`0` 關閉） |
+| `watch.vip_chats` | 有新訊息時 `watch.py` 會跳通知的聊天室（名稱或完整 ID），例如 `["Alice", "Project Team"]` |
+| `watch.archive_chats` | 除了已有存檔資料夾的聊天室之外，`watch.py` 還可以存檔的聊天室（名稱或完整 ID）；其他聊天室一律忽略 |
 
 **`media-digest`**（Windows 為 `%APPDATA%\media-digest\config.toml`，其他系統為 `~/.config/media-digest/config.toml`；可用 `MEDIA_DIGEST_CONFIG` 覆寫）：
 

@@ -6,6 +6,9 @@ Matches line-cli v0.4.0 (verified 2026-10-12)
 builds the history on the user's machine: it fetches the latest 100, appends what is new, and
 downloads attachments immediately because LINE expires them.
 
+`watch.py` (see [watch.md](watch.md)) writes to the same archive live, from `line watch` events, and
+runs this same sync logic for the chats that received messages.
+
 ## Contents
 
 - Command line
@@ -155,7 +158,7 @@ Other tools may build on the archive. These parts are stable:
 
 1. **`sync.py` command line and summary JSON.** The options and the fields `chat_id`, `archive_dir`,
    `messages_md`, `new_messages`, `new_messages_from_line`, `new_files`, `failed_files`,
-   `gap_possible` and `warnings` (and the other fields listed under "Summary JSON") are not renamed or
+   `gap_possible` and `warnings` (and the other fields listed under "Summary JSON", including `gap`) are not renamed or
    removed. Changes are additive only; anything else is marked **BREAKING** in `CHANGELOG.md`.
 2. **Chat folders** are `<name>__<chat_id>` (or just `<chat_id>` when the name is unknown) and hold
    `messages.jsonl`; attachments are `files/<YYYYMMDD-HHMMSS>_<message_id>.<ext>`.
@@ -189,7 +192,14 @@ max_bytes = 20971520                          # larger attachments are only mark
 line_emoji = true                             # cache LINE emoji reaction images once (see above)
 [render]
 quiet_gap_days = 3                            # messages.md notes silences longer than this; 0 = off
+[watch]
+vip_chats = ["Alice", "Project Team"]         # watch.py shows a toast for new incoming messages here
+archive_chats = ["Family"]                    # watch.py may also archive these (besides archived chats)
 ```
+
+`watch.vip_chats` and `watch.archive_chats` hold chat names or full chat IDs (never secrets); see
+[watch.md](watch.md). Without `archive_chats`, `watch.py` stores only chats that already have an
+archive folder.
 
 `max_bytes` cannot raise the CLI's own 20 MiB cap; it can only lower it. A file over the limit is
 removed again after download and recorded as `too_large`; raising the limit later retries it while
@@ -218,7 +228,9 @@ Video and audio are not transcribed during sync; use `media-digest` on a single 
 `messages.md` line of the new messages, `null` if none), `total_messages`, `new_files[]`
 (`message_id`, `type`, `path`, `file`, `bytes`), `failed_files[]` (`message_id`, `type`, `reason`,
 `kind`, `message`; only attempts made in this run), `possibly_unsent[]` (`message_id`,
-`created_time`, `from`, `excerpt`; newly detected in this run), `gap_possible`, `warnings[]`.
+`created_time`, `from`, `excerpt`; newly detected in this run), `gap_possible`, `gap` (`null`, or
+`{after_id, before_id, from, to}` with the missing range as UTC ISO times; detected in this run),
+`warnings[]`.
 `archive_dir` is `null` for a chat with no messages (nothing is created for it).
 
 ## Limits and heuristics
@@ -227,13 +239,17 @@ Video and audio are not transcribed during sync; use `media-digest` on a single 
 - Attachments: 20 MiB each; expired ones and ones stored behind external URLs cannot be downloaded.
 - **Gap**: when the fetched window is full (100 messages) and its oldest message is newer than the
   newest archived message, messages in between may be lost: `gap_possible: true`, a gap marker in
-  `messages.md`, an entry in `state.json`. Sync more often (it is cheap) to avoid this.
+  `messages.md`, an entry in `state.json`, and `gap` in the summary with the time range
+  (`from` = the newest archived message, `to` = the oldest one returned). The messages in between are
+  permanently unrecoverable because the CLI cannot page back. Sync more often (it is cheap) or run
+  `watch.py`, which stores each message as it arrives ([watch.md](watch.md)).
 - **Possibly unsent** (a guess): an archived message whose time lies inside the fetched window but
   which is missing from it. It may also be a message LINE could not return. The message is kept
   and marked, and the mark disappears if it shows up again. Only messages archived before the
   unsend can be detected, and exact unsend events are not available from the CLI.
 - Only chats the personal account has joined are visible; this is not the OA chat list.
-- Two syncs of the same chat at the same moment are not supported.
+- Two syncs of the same chat at the same moment are not supported, and neither is `sync.py` for
+  a chat while `watch.py` is writing to the archive (`watch.py` appends to `messages.jsonl` too).
 
 ## Privacy
 

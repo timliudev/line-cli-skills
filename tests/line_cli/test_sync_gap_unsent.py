@@ -8,11 +8,13 @@ from .sync_helpers import (
     CHAT,
     Seq,
     archive_dir,
+    at,
     base_rules,
     messages_rule,
     msg,
     read_jsonl,
     run_sync,
+    sync,
 )
 
 NOW = "2026-10-12T00:00:00Z"
@@ -142,3 +144,30 @@ def test_merge_window_unsent_unit():
     assert result.changed and not result.new_ids
     marked = {r["id"]: r.get("possibly_unsent_at") for r in result.records}
     assert marked == {"1": None, "2": None, "3": None, "4": NOW, "5": None}
+
+
+def test_gap_field_reports_the_missing_time_range(fake_line, archive_root, capsys):
+    first = window(1, 100, 0)  # newest archived: minute 99
+    second = window(201, 100, 500)  # oldest fetched: minute 500
+    fake_line.scenario(base_rules(messages_rule(Seq(first, second))))
+
+    code, out = run_sync(capsys, CHAT, "--name", "G")
+    assert out["gap"] is None and out["gap_possible"] is False
+
+    code, out = run_sync(capsys, CHAT, "--name", "G")
+    assert out["gap_possible"] is True
+    gap = out["gap"]
+    assert gap["after_id"] == "100" and gap["before_id"] == "201"
+    assert gap["from"] == sync.iso_utc(at(99)) and gap["to"] == sync.iso_utc(at(500))
+    assert gap["from"] < gap["to"]
+    assert gap["to"] in " ".join(out["warnings"])  # the warning names the range too
+    assert "watch.py" in " ".join(out["warnings"])
+
+
+def test_no_gap_field_when_the_window_is_not_full(fake_line, archive_root, capsys):
+    first = window(1, 10, 0)
+    second = window(201, 10, 500)  # far apart, but only 10 messages: nothing was cut off
+    fake_line.scenario(base_rules(messages_rule(Seq(first, second))))
+    run_sync(capsys, CHAT)
+    code, out = run_sync(capsys, CHAT)
+    assert out["gap"] is None and out["gap_possible"] is False

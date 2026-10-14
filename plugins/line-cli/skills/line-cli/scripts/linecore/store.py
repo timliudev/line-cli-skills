@@ -214,6 +214,8 @@ class MergeResult:
     gap_possible: bool = False
     gap_after_id: str | None = None
     gap_before_id: str | None = None
+    gap_from_time: int = 0  # created_time (ms) of the newest message archived before the gap
+    gap_to_time: int = 0  # created_time (ms) of the oldest message that could be fetched
 
 
 def merge_window(
@@ -250,6 +252,8 @@ def merge_window(
             result.gap_possible = True
             result.gap_after_id = newest_id
             result.gap_before_id = oldest_fetched["id"]
+            result.gap_from_time = newest_time
+            result.gap_to_time = lo
 
     # --- refresh known, append new
     for item in fresh:

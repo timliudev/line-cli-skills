@@ -373,10 +373,19 @@ class Syncer:
             }
             for r in merged.possibly_unsent
         ]
+        gap = None
         if merged.gap_possible:
+            gap = {
+                "after_id": merged.gap_after_id,
+                "before_id": merged.gap_before_id,
+                "from": iso_utc(merged.gap_from_time),
+                "to": iso_utc(merged.gap_to_time),
+            }
             warnings.append(
-                "possible gap: the oldest of the latest 100 messages is newer than the last "
-                "archived one, so messages in between may be unrecoverable"
+                f"possible gap: LINE only returns the latest {FETCH_LIMIT} messages and the oldest "
+                f"of them ({gap['to']}) is newer than the last archived one ({gap['from']}), so "
+                "the messages in between are permanently unrecoverable. Sync more often or run "
+                "watch.py to avoid this"
             )
         first_new = min(
             (rendered.first_line[i] for i in merged.new_ids if i in rendered.first_line),
@@ -391,6 +400,7 @@ class Syncer:
             failed_files=failed_files,
             possibly_unsent=unsent,
             gap_possible=merged.gap_possible,
+            gap=gap,
             warnings=warnings,
             total_messages=len(records),
             new_messages_from_line=first_new,
@@ -403,6 +413,10 @@ class Syncer:
 def _time(record: dict[str, Any] | None) -> int:
     value = (record or {}).get("created_time")
     return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
+def iso_utc(millis: int) -> str:
+    return datetime.fromtimestamp(millis / 1000, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _excerpt(record: dict[str, Any], limit: int = 80) -> str:
@@ -436,6 +450,7 @@ def summary_for(
     failed_files: list[dict[str, Any]] | None = None,
     possibly_unsent: list[dict[str, Any]] | None = None,
     gap_possible: bool = False,
+    gap: dict[str, Any] | None = None,
     warnings: list[str] | None = None,
     total_messages: int = 0,
     new_messages_from_line: int | None = None,
@@ -452,6 +467,7 @@ def summary_for(
         "failed_files": failed_files or [],
         "possibly_unsent": possibly_unsent or [],
         "gap_possible": gap_possible,
+        "gap": gap,
         "warnings": warnings or [],
     }
 
