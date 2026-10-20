@@ -1,10 +1,11 @@
 # Local archive and sync.py
 
-Matches line-cli v0.4.0 (verified 2026-10-12)
+Matches line-cli v0.5.0 (verified 2026-10-20)
 
-`line` keeps no message history and returns at most the latest 100 messages of a chat. `sync.py`
-builds the history on the user's machine: it fetches the latest 100, appends what is new, and
-downloads attachments immediately because LINE expires them.
+`line` keeps no message history; it serves the chat's available history in pages of at most 100
+(`messages --page --json`). `sync.py` builds the history on the user's machine: it pages back from
+the newest message until it reaches the archive, appends what is new, and downloads attachments
+immediately because LINE expires them.
 
 `watch.py` (see [watch.md](watch.md)) writes to the same archive live, from `line watch` events, and
 runs this same sync logic for the chats that received messages.
@@ -25,7 +26,8 @@ runs this same sync logic for the chats that received messages.
 ## Command line
 
 ```
-sync.py CHAT [--name LABEL] [--types image,video,audio,file] [--max-bytes N] [--no-download] [--json]
+sync.py CHAT [--name LABEL] [--types image,video,audio,file] [--max-bytes N] [--no-download]
+             [--max-pages N] [--backfill] [--json]
 sync.py --all [same options]
 ```
 
@@ -33,7 +35,11 @@ sync.py --all [same options]
   An ambiguous name exits `3` with the candidates; no match exits `4`.
 - `--types` and `--max-bytes` override `download.types` and `download.max_bytes` for this run.
   `--no-download` archives text only; attachments then show as "not downloaded" and are picked up
-  by a later sync while they are still inside the latest 100 messages.
+  by a later sync while they are still inside the range it fetches (at least the latest 100 messages).
+- `--max-pages N` (default 10): history pages of 100 one run reads at most, per chat.
+- `--backfill`: keep paging back past the archive until LINE reports no older history
+  (`exhausted`) or `--max-pages` is reached. Without it a first sync reads one page and a later
+  sync stops as soon as it reaches the newest archived message.
 - `--name` labels the folder when `CHAT` is an ID. A name found by resolving, or a contact name for
   a direct chat, is used automatically. Without any name the folder is just the chat ID, or keeps
   its existing name. Group names are not in `line chats --json`, so `--all` takes them from the
@@ -78,7 +84,7 @@ sync.py --all [same options]
   as a warning. Idempotent.
 - `messages.jsonl` holds the CLI's items unchanged plus one archive-only field,
   `possibly_unsent_at` (ISO UTC time). Deleting `messages.md` is harmless; the next sync rebuilds it.
-- Reactions and decryption results of messages still inside the latest 100 are refreshed. A
+- Reactions and decryption results of the fetched messages are refreshed. A
   readable copy is never replaced by a failed decryption.
 - `messages.md`: one `## YYYY-MM-DD` section per day, one line per message
   (`- 14:03 **Sender**: text`), continuation lines indented, `Me` for the user's own messages.
@@ -105,7 +111,7 @@ sync.py --all [same options]
 - A reply is a message whose `reply_to` field holds the ID of the message it answers
   (`messages.md` shows `in reply to Name: "..."`). Reactions are stored on the message that was
   reacted to, in its `reactions` array (`fromUserMid`, `reactionType`, `atMillis`), and are refreshed
-  while that message is inside the latest 100.
+  while that message is inside the range a later sync fetches (at least the latest 100 messages).
 - "Who replied to / reacted to message X" therefore means: find X, then collect the messages whose
   `reply_to` equals X's ID and read X's `reactions`. Only messages in the archive can be found.
 - `thread.py` does exactly that, offline:
@@ -204,18 +210,21 @@ archive folder.
 
 `max_bytes` cannot raise the CLI's own 20 MiB cap; it can only lower it. A file over the limit is
 removed again after download and recorded as `too_large`; raising the limit later retries it while
-it is still inside the latest 100 messages.
+it is still inside the range a later sync fetches (at least the latest 100 messages).
 
 ## What a sync does
 
-1. `messages CHAT --json --limit 100`, then `contacts --mid ...` for unknown senders (cached for a
-   week) and `whoami` to recognise the user's own messages.
+1. `messages CHAT --page --json --limit 100`, then the next older page with `--cursor` until a
+   page reaches the newest archived message (by ID or time), LINE reports `exhausted`, or
+   `--max-pages` pages were read (with `--backfill`: until exhausted or `--max-pages`). An older
+   page that fails stops paging with a warning and keeps what was read. Then `contacts --mid ...`
+   for unknown senders (cached for a week) and `whoami` to recognise the user's own messages.
    If `contacts --mid` cannot name a sender (typical for non-friend group members), one extra
    `messages CHAT --limit 100 --show-ids` (text) call maps message IDs to display names; they are
    stored in `contacts.json` like any other name. `--all` also names folders of active chats from
    `chats --limit 0 --show-ids`.
 2. Merge by message ID: new IDs are appended, known IDs refreshed. Nothing is ever deleted.
-3. Download every attachment of the fetched window that has no file yet and whose type is allowed.
+3. Download every attachment of the fetched pages that has no file yet and whose type is allowed.
    Permanent failures (`expired`, `external`, `too_large`) are recorded in `state.json` and not
    retried; transient ones (for example `processing`, network) are tried again next sync. A login or
    storage problem stops the downloads for that chat without recording anything against messages.
@@ -226,7 +235,8 @@ Video and audio are not transcribed during sync; use `media-digest` on a single 
 ## Summary JSON
 
 `chat`, `chat_id`, `archive_dir`, `messages_md`, `new_messages`, `new_messages_from_line` (first
-`messages.md` line of the new messages, `null` if none), `total_messages`, `new_files[]`
+`messages.md` line of the new messages, `null` if none), `total_messages`, `pages` (history pages
+read), `new_files[]`
 (`message_id`, `type`, `path`, `file`, `bytes`), `failed_files[]` (`message_id`, `type`, `reason`,
 `kind`, `message`; only attempts made in this run), `possibly_unsent[]` (`message_id`,
 `created_time`, `from`, `excerpt`; newly detected in this run), `gap_possible`, `gap` (`null`, or
@@ -236,15 +246,18 @@ Video and audio are not transcribed during sync; use `media-digest` on a single 
 
 ## Limits and heuristics
 
-- A first sync reaches only the latest 100 messages. Older history cannot be fetched.
+- A first sync reads only the latest 100 messages unless `--backfill` is given. LINE serves only
+  the history still available to this client: neither full history nor a fixed retention period
+  is guaranteed, and some old encrypted messages may be unreadable.
 - Attachments: 20 MiB each; expired ones and ones stored behind external URLs cannot be downloaded.
-- **Gap**: when the fetched window is full (100 messages) and its oldest message is newer than the
-  newest archived message, messages in between may be lost: `gap_possible: true`, a gap marker in
-  `messages.md`, an entry in `state.json`, and `gap` in the summary with the time range
-  (`from` = the newest archived message, `to` = the oldest one returned). The messages in between are
-  permanently unrecoverable because the CLI cannot page back. Sync more often (it is cheap) or run
-  `watch.py`, which stores each message as it arrives ([watch.md](watch.md)).
-- **Possibly unsent** (a guess): an archived message whose time lies inside the fetched window but
+- **Gap**: paging stopped before it reached the archive (`--max-pages` was reached, or an older
+  page failed) while LINE still had older history, so messages in between were not fetched:
+  `gap_possible: true`, a gap marker in `messages.md`, an entry in `state.json`, and `gap` in the
+  summary with the time range (`from` = the newest archived message, `to` = the oldest one
+  returned). The warning says which cause. Sync again, with a higher `--max-pages` if it was the
+  page limit; the fetched messages fill the hole, but the marker already written stays in
+  `messages.md`. When LINE reports `exhausted` no gap is flagged (there is nothing older to fetch).
+- **Possibly unsent** (a guess): an archived message whose time lies inside the fetched range but
   which is missing from it. It may also be a message LINE could not return. The message is kept
   and marked, and the mark disappears if it shows up again. Only messages archived before the
   unsend can be detected, and exact unsend events are not available from the CLI.

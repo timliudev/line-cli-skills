@@ -3,7 +3,13 @@
 
 Usage
   sync.py CHAT [--name NAME] [--types image,video,audio,file] [--max-bytes N] [--no-download]
+              [--max-pages N] [--backfill]
   sync.py --all [same options]
+
+History is read in pages of 100 (`line messages --page --json`, newest first). A sync pages back
+until it reaches the newest archived message, so missed messages are filled in; it stops after
+--max-pages pages (default 10). A first sync reads one page unless --backfill is given, which keeps
+paging back until LINE has no older history (or --max-pages is reached).
 
 CHAT is a chat name or a full chat ID. One JSON document is printed on stdout (diagnostics go to
 stderr); `--json` is accepted for symmetry and changes nothing.
@@ -35,7 +41,8 @@ from linecore.config import DOWNLOAD_TYPES, Config, load_config_safe  # noqa: E4
 from linecore.render import render_markdown  # noqa: E402
 
 EXIT_OK, EXIT_FAIL, EXIT_USAGE, EXIT_DECIDE, EXIT_NOT_FOUND = 0, 1, 2, 3, 4
-FETCH_LIMIT = 100  # upstream returns at most this many recent messages per chat
+FETCH_LIMIT = 100  # upstream returns at most this many messages per history page
+DEFAULT_MAX_PAGES = 10  # pages one sync reads at most (1000 messages)
 
 # Failures that say nothing about one attachment: stop trying the rest of this chat.
 SYSTEMIC = {
@@ -63,6 +70,17 @@ class Options:
     max_bytes: int
     download: bool = True
     tz: tzinfo | None = None  # None = local time
+    max_pages: int = DEFAULT_MAX_PAGES
+    backfill: bool = False
+
+
+@dataclass
+class Fetched:
+    messages: list[dict[str, Any]]  # oldest first, unique IDs
+    warnings: list[str]
+    exhausted: bool = False  # LINE has no older history than the oldest fetched message
+    pages: int = 0
+    page_limit_hit: bool = False
 
 
 @dataclass
@@ -102,29 +120,65 @@ class Syncer:
                 self._active_names = {}
         return self._active_names.get(chat_id)
 
-    def fetch(self, chat_id: str) -> tuple[list[dict[str, Any]], list[str]]:
-        result = runner.run_line(
-            ["messages", chat_id, "--json", "--limit", str(FETCH_LIMIT)],
-            config=self.config,
-            binary=self.binary,
-        )
-        if not result.ok:
-            raise SyncError(self._error_from(result))
-        if not isinstance(result.data, list):
-            raise SyncError(
-                {
-                    "kind": "unexpected_output",
-                    "message": "`line messages --json` did not return a list",
-                    "retryable": False,
-                }
-            )
-        items = [m for m in result.data if isinstance(m, dict) and isinstance(m.get("id"), str)]
+    def _page(self, chat_id: str, cursor: str | None) -> runner.LineResult:
+        args = ["messages", chat_id, "--page", "--json", "--limit", str(FETCH_LIMIT)]
+        if cursor:
+            args += ["--cursor", cursor]
+        return runner.run_line(args, config=self.config, binary=self.binary)
+
+    def fetch(self, chat_id: str, newest: tuple[int, str] | None = None) -> Fetched:
+        """Read history pages, newest first, until the archive is reached.
+
+        ``newest`` is ``(created_time, id)`` of the newest archived message (None: no archive).
+        Without an archive one page is read, unless ``backfill`` is on. Reading stops early when
+        LINE says the history is exhausted or after ``max_pages`` pages.
+        """
+        opts = self.options
+        out = Fetched(messages=[], warnings=[])
         seen: set[str] = set()
-        unique = [m for m in items if not (m["id"] in seen or seen.add(m["id"]))]
-        warnings = list(result.warnings)
-        if len(unique) != len(result.data):
-            warnings.append(f"ignored {len(result.data) - len(unique)} malformed message item(s)")
-        return unique, warnings
+        cursor: str | None = None
+        while True:
+            result = self._page(chat_id, cursor)
+            data = result.data if result.ok else None
+            items = data.get("messages") if isinstance(data, dict) else None
+            if not isinstance(items, list):
+                error = (
+                    self._error_from(result)
+                    if not result.ok
+                    else {
+                        "kind": "unexpected_output",
+                        "message": "`line messages --page --json` did not return a page",
+                        "retryable": False,
+                    }
+                )
+                if out.pages == 0:
+                    raise SyncError(error)
+                out.warnings.append(
+                    f"stopped reading older history after {out.pages} page(s): "
+                    f"{error.get('message', 'line failed')}"
+                )
+                break
+            out.pages += 1
+            out.warnings += result.warnings
+            good = [m for m in items if isinstance(m, dict) and isinstance(m.get("id"), str)]
+            if len(good) != len(items):
+                out.warnings.append(f"ignored {len(items) - len(good)} malformed message item(s)")
+            for item in good:
+                if item["id"] not in seen:
+                    seen.add(item["id"])
+                    out.messages.append(item)
+            next_cursor = data.get("next_cursor")
+            if data.get("exhausted") is True or not isinstance(next_cursor, str) or not next_cursor:
+                out.exhausted = data.get("exhausted") is True
+                break
+            if not opts.backfill and (newest is None or _reaches(out.messages, newest)):
+                break
+            if out.pages >= opts.max_pages:
+                out.page_limit_hit = True
+                break
+            cursor = next_cursor
+        out.messages.sort(key=lambda r: (_time(r), _id_key(r["id"])))
+        return out
 
     def _text_fallback(self, chat_id: str, records: list[dict[str, Any]], now_ms: int) -> bool:
         """Fill missing sender names from `messages --show-ids` text (once per sync of a chat).
@@ -170,15 +224,8 @@ class Syncer:
                 "never commit or publish it."
             )
 
-        fetched, fetch_warnings = self.fetch(chat_id)
-        warnings += fetch_warnings
-
         chat_dir, merge_warnings = store.merge_chat_dirs(root, chat_id)
         warnings += merge_warnings
-        if not fetched and chat_dir is None:
-            warnings.append("the chat has no messages to archive yet")
-            return summary_for(chat_id, name_hint, None, warnings=warnings)
-
         existing: list[dict[str, Any]] = []
         state = store.new_state(chat_id)
         if chat_dir is not None:
@@ -186,7 +233,17 @@ class Syncer:
             warnings += read_warnings
             state = store.read_state(chat_dir / store.STATE_NAME, chat_id)
 
-        merged = store.merge_window(existing, fetched, now_iso=now_iso, window_limit=FETCH_LIMIT)
+        archived = [(_time(r), r["id"]) for r in existing if _time(r) > 0]
+        page = self.fetch(chat_id, max(archived) if archived else None)
+        fetched = page.messages
+        warnings += page.warnings
+        if not fetched and chat_dir is None:
+            warnings.append("the chat has no messages to archive yet")
+            return summary_for(chat_id, name_hint, None, warnings=warnings)
+
+        merged = store.merge_window(
+            existing, fetched, now_iso=now_iso, history_exhausted=page.exhausted
+        )
         records = merged.records
 
         # --- names
@@ -382,12 +439,19 @@ class Syncer:
                 "from": iso_utc(merged.gap_from_time),
                 "to": iso_utc(merged.gap_to_time),
             }
-            warnings.append(
-                f"possible gap: LINE only returns the latest {FETCH_LIMIT} messages and the oldest "
-                f"of them ({gap['to']}) is newer than the last archived one ({gap['from']}), so "
-                "the messages in between are permanently unrecoverable. Sync more often or run "
-                "watch.py to avoid this"
-            )
+            if page.page_limit_hit:
+                why = (
+                    f"after {page.pages} page(s) (--max-pages) the oldest fetched message "
+                    f"({gap['to']}) is still newer than the last archived one ({gap['from']}); "
+                    "sync again with a higher --max-pages to fill it"
+                )
+            else:
+                why = (
+                    f"reading older history stopped at {gap['to']}, after the last archived "
+                    f"message ({gap['from']}), so the messages in between were not fetched; "
+                    "sync again later, and if it persists LINE no longer serves them"
+                )
+            warnings.append(f"possible gap: {why}")
         first_new = min(
             (rendered.first_line[i] for i in merged.new_ids if i in rendered.first_line),
             default=None,
@@ -397,6 +461,7 @@ class Syncer:
             chat_name,
             chat_dir,
             new_messages=len(merged.new_ids),
+            pages=page.pages,
             new_files=new_files,
             failed_files=failed_files,
             possibly_unsent=unsent,
@@ -414,6 +479,16 @@ class Syncer:
 def _time(record: dict[str, Any] | None) -> int:
     value = (record or {}).get("created_time")
     return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
+def _id_key(message_id: str) -> tuple[int, str]:
+    return (int(message_id), "") if message_id.isdigit() else (0, message_id)
+
+
+def _reaches(messages: list[dict[str, Any]], newest: tuple[int, str]) -> bool:
+    """True when the fetched history goes back to (or past) the newest archived message."""
+    newest_time, newest_id = newest
+    return any(m["id"] == newest_id or 0 < _time(m) <= newest_time for m in messages)
 
 
 def iso_utc(millis: int) -> str:
@@ -447,6 +522,7 @@ def summary_for(
     archive_dir: Path | None,
     *,
     new_messages: int = 0,
+    pages: int = 0,
     new_files: list[dict[str, Any]] | None = None,
     failed_files: list[dict[str, Any]] | None = None,
     possibly_unsent: list[dict[str, Any]] | None = None,
@@ -464,6 +540,7 @@ def summary_for(
         "new_messages": new_messages,
         "new_messages_from_line": new_messages_from_line,
         "total_messages": total_messages,
+        "pages": pages,
         "new_files": new_files or [],
         "failed_files": failed_files or [],
         "possibly_unsent": possibly_unsent or [],
@@ -514,6 +591,19 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--no-download", action="store_true", help="archive text only; download no attachments"
     )
+    parser.add_argument(
+        "--max-pages",
+        type=positive_int,
+        default=DEFAULT_MAX_PAGES,
+        metavar="N",
+        help=f"read at most N history pages of {FETCH_LIMIT} per chat "
+        f"(default {DEFAULT_MAX_PAGES})",
+    )
+    parser.add_argument(
+        "--backfill",
+        action="store_true",
+        help="keep reading older history until LINE has none left (bounded by --max-pages)",
+    )
     parser.add_argument("--json", action="store_true", help="accepted for symmetry; always JSON")
     return parser
 
@@ -544,6 +634,8 @@ def main(argv: list[str] | None = None) -> int:
         types=args.types if args.types is not None else config.download_types,
         max_bytes=args.max_bytes or config.download_max_bytes,
         download=not args.no_download,
+        max_pages=args.max_pages,
+        backfill=args.backfill,
     )
     syncer = Syncer(config=config, options=options)
 

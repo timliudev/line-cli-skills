@@ -34,7 +34,7 @@ def test_all_continues_after_a_chat_fails(fake_line, archive_root, capsys):
             chats_listing(CHAT, BROKEN, OTHER),
             messages_rule([msg(1, 0, "in the first chat")], chat=CHAT),
             rule(
-                ["messages", BROKEN, "--json", "--limit", "100"],
+                ["messages", BROKEN, "--page", "--json", "--limit", "100"],
                 responses=[resp(1, "", "line: LINE request failed: dial tcp: i/o timeout")],
             ),
             messages_rule([msg(2, 1, "in the third chat")], chat=OTHER),

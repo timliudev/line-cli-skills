@@ -20,6 +20,7 @@ from .sync_helpers import (
     count_calls,
     messages_rule,
     msg,
+    page_args,
     read_jsonl,
     run_sync,
 )
@@ -63,8 +64,8 @@ def test_first_sync_creates_archive(fake_line, archive_root, capsys):
         next(line for line in md.splitlines() if "good morning" in line)
     )
 
-    # an explicit --limit 100 is always sent (upstream's default would be 20)
-    assert ["messages", CHAT, "--json", "--limit", "100"] in fake_line.argv_calls()
+    # history is read as pages of 100 (upstream's default would be 20)
+    assert ["messages", CHAT, "--page", "--json", "--limit", "100"] in fake_line.argv_calls()
     # names are cached for later syncs
     cache = json.loads((archive_root / "contacts.json").read_text(encoding="utf-8"))
     assert cache["names"][ALICE]["name"] == "Alice"
@@ -211,7 +212,7 @@ def test_unknown_name_exits_4(fake_line, archive_root, capsys):
 def test_line_failure_is_reported_not_raised(fake_line, archive_root, capsys):
     not_logged_in = resp(1, "", "line: no saved LINE session; run line login")
     fake_line.scenario(
-        base_rules(rule(["messages", CHAT, "--json", "--limit", "100"], responses=[not_logged_in]))
+        base_rules(rule(page_args(), responses=[not_logged_in]))
     )
     code, out = run_sync(capsys, CHAT)
     assert code == 1 and out["chat_id"] == CHAT

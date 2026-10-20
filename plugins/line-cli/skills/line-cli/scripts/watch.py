@@ -735,8 +735,8 @@ class WatchLoop:
                 self.stats.gaps.append({"chat_id": chat_id, **summary["gap"]})
                 self.emit(
                     f"warning: gap in chat {chat_id[:7]}…: messages between "
-                    f"{summary['gap']['from']} and {summary['gap']['to']} are unrecoverable "
-                    "(more than 100 arrived while nothing was archiving)"
+                    f"{summary['gap']['from']} and {summary['gap']['to']} were not fetched "
+                    "(more than sync's --max-pages allows, or LINE no longer serves them)"
                 )
             if summary.get("new_messages") or summary.get("new_files"):
                 self.emit(

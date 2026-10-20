@@ -147,7 +147,9 @@ def test_yes_sends_in_order_with_a_pause_between_recipients(fake_line, recipient
     calls = sends(fake_line)
     assert [c["args"][1] for c in calls] == [ALICE, BOB, CAROL]
     # text always travels over stdin, so quotes and newlines survive
-    assert all(c["args"] == ["send", c["args"][1], "--stdin", "--json"] for c in calls)
+    assert all(
+        c["args"] == ["send", c["args"][1], "--stdin", "--json", "--require-e2ee"] for c in calls
+    )
     assert all(c["stdin"] == 'Say "hi"\nline 2' for c in calls)
     assert delays == [1.5, 1.5]  # between recipients, not after the last one
 
@@ -350,3 +352,39 @@ def test_incomplete_name_lookup_is_not_resolved_but_a_full_id_is(
     lst.write_text(ALICE + "\n" + BOB + "\n", encoding="utf-8")  # the user switched to full IDs
     code, out = go(capsys, "--recipients", str(lst), "--text", "hi")
     assert code == 0 and [c["args"][1] for c in sends(fake_line)] == [ALICE, BOB]
+
+
+def test_allow_non_e2ee_is_part_of_the_plan_and_drops_the_guard(
+    fake_line, recipients, capsys, delays
+):
+    fake_line.scenario(three_people(rule(prefix=["send"], stdout=SENT)))
+    _, strict = run(capsys, "--recipients", str(recipients), "--text", "hi")
+    _, loose = run(capsys, "--recipients", str(recipients), "--text", "hi", "--allow-non-e2ee")
+    assert strict["require_e2ee"] is True and loose["require_e2ee"] is False
+    assert strict["plan"] != loose["plan"]
+    code, out = run(
+        capsys,
+        "--recipients",
+        str(recipients),
+        "--text",
+        "hi",
+        "--allow-non-e2ee",
+        "--yes",
+        "--plan",
+        loose["plan"],
+    )
+    assert code == 0 and out["sent"] is True
+    assert all("--require-e2ee" not in c["args"] for c in sends(fake_line))
+
+
+def test_encryption_required_stops_and_says_nothing_was_sent(
+    fake_line, recipients, capsys, delays
+):
+    stderr = "line: Nothing was sent.\nThis send requires E2EE. Use the default send policy."
+    fake_line.scenario(three_people(rule(prefix=["send"], exit=1, stderr=stderr)))
+    code, out = go(capsys, "--recipients", str(recipients), "--text", "hi")
+    assert code == 1
+    first = out["results"][0]
+    assert first["error"]["kind"] == "encryption_required"
+    assert first["may_have_been_delivered"] is False
+    assert [r["status"] for r in out["results"][1:]] == ["not_attempted", "not_attempted"]

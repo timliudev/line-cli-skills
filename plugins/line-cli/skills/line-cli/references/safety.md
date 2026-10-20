@@ -1,6 +1,6 @@
 # line-cli safety rules
 
-Matches line-cli v0.4.0 (verified 2026-10-12)
+Matches line-cli v0.5.0 (verified 2026-10-20)
 
 These rules govern how an agent uses `line` on a real personal LINE account. LINE is a live
 service: a sent message, a reaction, or an unsend reaches other people, cannot be taken back in
@@ -29,7 +29,8 @@ Permission does not carry over to later actions.
 
 | Command | Why it needs confirmation | What to show before asking |
 | --- | --- | --- |
-| `line send` (`--text`, `--stdin`, `--file`) | Delivers a message to other people. Cannot be recalled by this CLI. | Chat name and ID, the full text (or a short summary plus length if very long), or the file name and size. Note `--reply-to` if used. |
+| `line send` (`--text`, `--stdin`, `--file`) | Delivers a message to other people. Cannot be recalled by this CLI. | Chat name and ID, the full text (or a short summary plus length if very long), or the file name and size. Note `--reply-to` and any `--mentions` (who is mentioned) if used. |
+| `lineq.py run --allow-non-e2ee -- send ...` / `broadcast.py --allow-non-e2ee` | Sends without end-to-end encryption to a chat where LINE reports none: the content travels over HTTPS/TLS only and **LINE can read it**. | That this chat has no end-to-end encryption, that LINE could read this message, and the message itself. Only after an `encryption_required` failure and an explicit yes to exactly that; never on your own initiative. |
 | `broadcast.py --yes` (many `line send` calls) | Delivers the same message to every listed chat, one after another. A failed run that is repeated duplicates the message for everyone who already got it. | The dry run's complete resolved list (name, type, ID of every recipient), the exact text (or file name and size) and the pause between sends. Run `--yes --plan HASH` (the plan is required) only after an explicit yes to exactly that; never re-run a failed broadcast; offer the `not_attempted` remainder as a new, separately confirmed broadcast. See [watch.md](watch.md). |
 | `line react` (add or `--remove`) | Visible to the other members of the chat. | Chat name and ID, target message (sender, a short excerpt, the message ID), and the reaction (or removal). |
 | `line unsend` | Removes a message for everyone. Irreversible. The CLI does not ask for confirmation when called with flags (only in interactive mode, `actions.go:74-82`). | Chat name and ID, the message ID and its excerpt, and that it will be removed for all members. |
@@ -38,7 +39,7 @@ Permission does not carry over to later actions.
 | `line update` (without `--check`) | Downloads and replaces the executable (`internal/cli/update.go:56-65`). | Current and latest version, installation method, and that the watcher and other commands must be stopped first. Use `line update --check --json` first. |
 | `line auth migrate --storage=headless` | Moves the session to another storage backend (Linux only). Requires typing `yes` (`auth.go:108-113`). | That it moves the local session, requires stopping watchers, and cannot be undone by the agent. |
 
-Read-only or local-only commands (`whoami`, `contacts`, `chats`, `messages`, `download`, `watch`,
+Read-only or local-only commands (`whoami`, `contacts`, `chats`, `members`, `messages`, `download`, `watch`,
 `auth status`, `update --check`, `version`, `help`) do not need a confirmation step for the act itself.
 `download` writes a new local file, so confirm the output path when the user did not give one.
 

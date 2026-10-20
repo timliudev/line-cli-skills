@@ -18,7 +18,7 @@ from typing import Any
 
 # The line-cli release this skill's references/ were written against, and the tag the
 # installer is pinned to. Bump both together after re-checking docs/CLI.md upstream.
-LINE_CLI_VERSION = "v0.4.0"
+LINE_CLI_VERSION = "v0.5.0"
 LINE_CLI_REPO = "kongesque/line-cli"
 
 APP_DIRNAME = "line-skill"

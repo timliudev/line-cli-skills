@@ -250,17 +250,17 @@ def merge_window(
     fresh: list[dict[str, Any]],
     *,
     now_iso: str,
-    window_limit: int,
+    history_exhausted: bool,
 ) -> MergeResult:
-    """Fold a freshly fetched window (oldest first) into the archive.
+    """Fold a freshly fetched window (oldest first, contiguous history) into the archive.
 
     * New IDs are appended (dedupe by message ID).
     * Known IDs are refreshed (reactions, a decryption that now works) but never downgraded to
       `decryption_failed`; a reappearing message loses its `possibly_unsent_at`.
     * Archived messages whose time falls inside the fresh window but which are missing from it are
       marked `possibly_unsent_at` (a heuristic; they are never deleted).
-    * Gap: the oldest fetched message is newer than the newest archived one while the window was
-      full, so messages in between may be unreachable.
+    * Gap: the oldest fetched message is newer than the newest archived one while LINE still had
+      older history (``history_exhausted`` False), so messages in between were not fetched.
     """
     by_id = {r["id"]: r for r in existing}
     fresh_by_id = {r["id"]: r for r in fresh}
@@ -272,7 +272,7 @@ def merge_window(
 
     # --- gap (computed against the archive as it was before this sync)
     archived_times = [(_time(r), r["id"]) for r in existing if _time(r) > 0]
-    if existing and fresh and len(fresh) >= window_limit and lo > 0 and archived_times:
+    if existing and fresh and not history_exhausted and lo > 0 and archived_times:
         newest_time, newest_id = max(archived_times)
         if newest_id not in fresh_by_id and lo > newest_time:
             oldest_fetched = min(fresh, key=lambda r: _time(r) or 1 << 62)

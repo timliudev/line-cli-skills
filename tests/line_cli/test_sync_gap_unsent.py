@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from linecore import store
 
+from .helpers import rule
 from .sync_helpers import (
     CHAT,
     Seq,
@@ -12,6 +13,7 @@ from .sync_helpers import (
     base_rules,
     messages_rule,
     msg,
+    page_args,
     read_jsonl,
     run_sync,
     sync,
@@ -35,7 +37,7 @@ def test_gap_detected_when_window_jumps_past_the_archive(fake_line, archive_root
     code, out = run_sync(capsys, CHAT, "--name", "G")
     assert code == 0 and out["gap_possible"] is False
 
-    code, out = run_sync(capsys, CHAT, "--name", "G")
+    code, out = run_sync(capsys, CHAT, "--name", "G", "--max-pages", "1")
     assert out["gap_possible"] is True and out["new_messages"] == 100
     assert any("gap" in w for w in out["warnings"])
 
@@ -78,9 +80,9 @@ def test_no_gap_when_window_is_not_full(fake_line, archive_root, capsys):
 def test_merge_window_gap_unit():
     old = window(1, 3, 0)
     fresh = window(10, 4, 100)
-    result = store.merge_window(old, fresh, now_iso=NOW, window_limit=4)
+    result = store.merge_window(old, fresh, now_iso=NOW, history_exhausted=False)
     assert result.gap_possible and result.gap_after_id == "3" and result.gap_before_id == "10"
-    quiet = store.merge_window(old, fresh, now_iso=NOW, window_limit=100)
+    quiet = store.merge_window(old, fresh, now_iso=NOW, history_exhausted=True)
     assert not quiet.gap_possible
 
 
@@ -139,7 +141,7 @@ def test_message_that_reappears_loses_the_mark(fake_line, archive_root, capsys):
 def test_merge_window_unsent_unit():
     old = [msg(i, i) for i in range(1, 6)]
     fresh = [msg(i, i) for i in (2, 3, 5)]  # window spans minutes 2..5; 4 is missing, 1 is older
-    result = store.merge_window(old, fresh, now_iso=NOW, window_limit=100)
+    result = store.merge_window(old, fresh, now_iso=NOW, history_exhausted=True)
     assert [r["id"] for r in result.possibly_unsent] == ["4"]
     assert result.changed and not result.new_ids
     marked = {r["id"]: r.get("possibly_unsent_at") for r in result.records}
@@ -154,14 +156,14 @@ def test_gap_field_reports_the_missing_time_range(fake_line, archive_root, capsy
     code, out = run_sync(capsys, CHAT, "--name", "G")
     assert out["gap"] is None and out["gap_possible"] is False
 
-    code, out = run_sync(capsys, CHAT, "--name", "G")
-    assert out["gap_possible"] is True
+    code, out = run_sync(capsys, CHAT, "--name", "G", "--max-pages", "1")
+    assert out["gap_possible"] is True and out["pages"] == 1
     gap = out["gap"]
     assert gap["after_id"] == "100" and gap["before_id"] == "201"
     assert gap["from"] == sync.iso_utc(at(99)) and gap["to"] == sync.iso_utc(at(500))
     assert gap["from"] < gap["to"]
     assert gap["to"] in " ".join(out["warnings"])  # the warning names the range too
-    assert "watch.py" in " ".join(out["warnings"])
+    assert "--max-pages" in " ".join(out["warnings"])
 
 
 def test_no_gap_field_when_the_window_is_not_full(fake_line, archive_root, capsys):
@@ -171,3 +173,67 @@ def test_no_gap_field_when_the_window_is_not_full(fake_line, archive_root, capsy
     run_sync(capsys, CHAT)
     code, out = run_sync(capsys, CHAT)
     assert out["gap"] is None and out["gap_possible"] is False
+
+
+# ------------------------------------------------------------------ paging (line >= v0.5.0)
+
+
+def test_missed_messages_are_filled_by_paging_back(fake_line, archive_root, capsys):
+    fake_line.scenario(
+        base_rules(
+            messages_rule(Seq(window(1, 100, 0), window(201, 100, 200))),
+            messages_rule(window(101, 100, 100), cursor="cursor:201"),
+            messages_rule(window(1, 100, 0), cursor="cursor:101"),
+        )
+    )
+    run_sync(capsys, CHAT, "--name", "G")
+    code, out = run_sync(capsys, CHAT, "--name", "G")
+    assert code == 0 and out["gap_possible"] is False and out["gap"] is None
+    assert out["new_messages"] == 200 and out["pages"] == 3
+    assert out["possibly_unsent"] == []
+    ids = [r["id"] for r in read_jsonl(archive_dir(archive_root) / "messages.jsonl")]
+    assert ids == [str(i) for i in range(1, 301)]  # oldest first, nothing missing
+
+
+def test_first_sync_reads_one_page_and_backfill_reads_more(fake_line, archive_root, capsys):
+    fake_line.scenario(
+        base_rules(
+            messages_rule(window(201, 100, 200)),
+            messages_rule(window(101, 100, 100), cursor="cursor:201"),
+            messages_rule(window(51, 50, 50), cursor="cursor:101"),
+        )
+    )
+    code, out = run_sync(capsys, CHAT)
+    assert out["pages"] == 1 and out["new_messages"] == 100
+    assert not any("--cursor" in argv for argv in fake_line.argv_calls())
+    code, out = run_sync(capsys, CHAT, "--backfill")
+    assert out["pages"] == 3 and out["new_messages"] == 150 and out["gap_possible"] is False
+
+
+def test_exhausted_history_is_not_reported_as_a_gap(fake_line, archive_root, capsys):
+    fake_line.scenario(
+        base_rules(
+            messages_rule(Seq(window(1, 100, 0), window(201, 100, 500))),
+            messages_rule([], cursor="cursor:201"),  # LINE has nothing older
+        )
+    )
+    run_sync(capsys, CHAT)
+    code, out = run_sync(capsys, CHAT)
+    assert out["gap_possible"] is False and out["pages"] == 2
+
+
+def test_a_failing_older_page_keeps_what_was_read(fake_line, archive_root, capsys):
+    fake_line.scenario(
+        base_rules(
+            messages_rule(Seq(window(1, 100, 0), window(201, 100, 500))),
+            rule(
+                page_args(cursor="cursor:201"),
+                exit=1,
+                stderr="line: LINE request failed: dial tcp: i/o timeout",
+            ),
+        )
+    )
+    run_sync(capsys, CHAT)
+    code, out = run_sync(capsys, CHAT)
+    assert code == 0 and out["new_messages"] == 100 and out["gap_possible"] is True
+    assert any("stopped reading older history" in w for w in out["warnings"])

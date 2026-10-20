@@ -1,10 +1,11 @@
 # line-cli command reference
 
-Matches line-cli v0.4.0 (verified 2026-10-12)
+Matches line-cli v0.5.0 (verified 2026-10-20 against `line COMMAND --help` and docs/CLI.md at the
+v0.5.0 tag)
 
 Source paths are relative to the upstream repo [kongesque/line-cli](https://github.com/kongesque/line-cli).
-Line numbers refer to a checkout at v0.4.0 plus 3 commits (`d3e79ff`), so they can be a few lines
-off against the v0.4.0 tag.
+Source line numbers were taken from a v0.4.0 checkout (`d3e79ff`); v0.5.0 moved code around, so
+treat them as pointers, not exact lines. Options added in v0.5.0 cite docs/CLI.md sections instead.
 
 ## Contents
 
@@ -15,6 +16,7 @@ off against the v0.4.0 tag.
 - logout
 - contacts
 - chats
+- members
 - messages
 - send
 - react
@@ -43,6 +45,14 @@ off against the v0.4.0 tag.
   download.go:47). Scripts must pass every required argument.
 - Ctrl-C prints `Cancelled.`/`Stopped after receiving a signal.` and exits 130;
   SIGTERM exits 143 (cmd/line/signals.go:17-77).
+- `--timeout DURATION` (e.g. `30s`) is accepted by `whoami`, `contacts`, `chats`, `members`,
+  `messages`, `send`, `download`, `react`, `unsend`. Default `0` (no deadline), except `download`
+  (`2m`). The deadline covers name and message lookup, authentication recovery, key preparation
+  and transfers; a deadline failure exits 1 (docs/CLI.md "Saved sessions and cancellation").
+- `--error-format=json` (global, **before** the command): one structured error object on stderr
+  for the core commands and `auth status`; stdout keeps its normal success/partial format and it
+  disables prompts. `login`, `logout`, `auth migrate`, `watch` and `update` reject it
+  (docs/JSON.md "Errors"). The skill's scripts still parse the text errors.
 - Every command that touches the session takes a session lock. If another process
   holds it, the command fails fast with exit 75 (see errors.md). Watch waits instead
   of failing (internal/events/watch.go:39-57).
@@ -53,7 +63,7 @@ off against the v0.4.0 tag.
 | --- | --- | --- |
 | Local only, no LINE contact | `help`, `version`, `auth status`, `auth migrate`, `logout` | `auth status --check` writes a local probe to test storage. |
 | Network, no LINE login | `update --check`, `update` | Contacts the GitHub release API. `update` (without `--check`) replaces the executable when it can self-update. |
-| Read-only remote | `whoami`, `contacts`, `chats`, `messages`, `download` | `download` also writes a new local file. Reading does not mark messages as read (docs/CLI.md:234). |
+| Read-only remote | `whoami`, `contacts`, `chats`, `members`, `messages`, `download` | `download` also writes a new local file. Reading does not mark messages as read (docs/CLI.md:234). |
 | Read-only remote, long-running | `watch` | Writes a local resume checkpoint in session storage (internal/events/watch.go:124-131, 200-203). No LINE mutation. |
 | Remote mutation | `send`, `react`, `unsend`, `login` | Each is attempted once. Never retried automatically (TOKEN_SESSION.md; docs/CLI.md:260-262). |
 | Local destructive | `logout`, `auth migrate --storage=headless`, `update` (installs) | `logout` removes the local session only; it does not revoke it on LINE (docs/CLI.md:489). |
@@ -130,33 +140,70 @@ line chats [--search TEXT] [--all] [--limit N] [--show-ids] [--json]
 - Legacy JSON: `--json` with no `--search` returns only `id`, `type`, and `unread_count`
   (chats.go:54-65). `name` and `updated_at` are absent. Add `--search` to get names
   and activity time.
+- `--details` (bool, requires `--json`, v0.5.0): `{"schema_version":1,"chats":[...]}` with `id`,
+  `type`, `name` (or `null`), `name_status`, `updated_at`, `unread_count` for every chat, newest
+  activity first (docs/JSON.md "Chat envelope").
+
+## members
+
+```
+line members CHAT [--json] [--timeout DURATION]
+```
+
+- v0.5.0. Groups only: direct chats and legacy rooms are unsupported. Read-only; never registers
+  keys or sends read receipts (docs/CLI.md "List group members and mention someone").
+- `--json`: `schema_version: 1` envelope with `chat`, `members[]`, `invitees[]` (each `mid`, `name`
+  or `null`, `name_status` `resolved`/`unavailable`, `self`), sorted by MID, plus
+  `members_complete` / `invitees_complete`. A present empty list is complete; a missing or `null`
+  list is incomplete.
+- Use it to get the user MID for `send --mentions`.
 
 ## messages
 
 ```
-line messages [CHAT] [--limit N] [--show-ids] [--json]
+line messages [CHAT] [--limit N] [--show-ids] [--json] [--timeout DURATION]
+line messages CHAT --page --json [--limit N] [--cursor CURSOR] [--details [--resolve-names]]
+line messages CHAT --details --json [--resolve-names]
+line messages CHAT --diagnostics --json [--limit N]
 ```
 
 - `CHAT` (positional, optional): full chat ID or unique exact name, case-insensitive. Quote names
   with spaces. Required non-interactively (messages.go:55-59). A flag may come before the chat.
-- `--limit` (int, default 20): fetch 1-100 recent messages (messages.go:36, 61-63).
-  Oldest-to-newest display order (display.go:60-64).
+- `--limit` (int, default 20): fetch 1-100 messages per call (messages.go:36, 61-63).
+  Human output is oldest first; plain `--json` keeps server order (newest first in practice).
 - `--show-ids` (bool): human output; shows each message ID and reply targets (display.go:92-105).
 - `--json` (bool): array of message objects (json-schema.md).
-- Read-only. Only the latest 100 messages are visible to any command (docs/CLI.md:791).
-- If any message has status `decryption_failed`, the full JSON or text output is still written,
-  then the command exits 1 with `N messages could not be decrypted; see each message's status/error`
-  (messages.go:202-218).
+- `--page` (bool, requires `--json`, v0.5.0): one history page, an object with
+  `schema_version: 1`, `chat_id`, `order: "newest_first"`, `messages` (same message objects as
+  plain `--json`), `exhausted`, `stop_reason` (`count_limit`, `page_limit`,
+  `end_of_available_history`) and `next_cursor` (absent when exhausted). Pass the cursor
+  unchanged with `--cursor` to the same chat for the next older page. A short page is not the end
+  (the anchor takes a slot, a page can even be empty); only `exhausted: true` is. Only history
+  still available to this client can be read; neither full history nor a fixed retention is
+  guaranteed (docs/CLI.md "History pagination JSON"). `sync.py` uses this.
+- `--details` (bool, requires `--json`, v0.5.0): versioned envelope with decoded `content`
+  (`kind` text/location/image/video/audio/file/contact/sticker/flex/rich/unsupported, incoming
+  `mentions`, sticker IDs, attachment name/size), `sender` and `chat`. `--resolve-names` adds
+  sender names (batched). Plain `--json` keeps the legacy shape (docs/JSON.md "Detailed content").
+- `--diagnostics` (bool, requires `--json`): message IDs and counts before decryption, no
+  content. Cannot combine with `--details`, `--resolve-names`, `--page`, `--cursor`.
+- Read-only. Reading never marks messages as read.
+- If any message has status `decryption_failed`, the full JSON or text output (or the page
+  object, with its cursor) is still written, then the command exits 1 with
+  `N messages could not be decrypted; see each message's status/error` (messages.go:202-218).
 
 ## send
 
 ```
-line send [CHAT] --text TEXT [--reply-to MESSAGE_ID] [--show-ids] [--json]
-line send [CHAT] --stdin [--reply-to MESSAGE_ID] [--show-ids] [--json]
-line send [CHAT] --file PATH [--reply-to MESSAGE_ID] [--show-ids] [--json]
+line send [CHAT] --text TEXT [--reply-to MESSAGE_ID] [--mentions JSON] [--require-e2ee] [--json]
+line send [CHAT] --stdin [--reply-to MESSAGE_ID] [--mentions JSON] [--require-e2ee] [--json]
+line send [CHAT] --file PATH [--reply-to MESSAGE_ID] [--require-e2ee] [--json]
+line send CHAT --image PATH [--require-e2ee] [--json]
 ```
 
-- Exactly one of `--text`, `--stdin`, `--file` is required non-interactively
+All forms also take `--show-ids` and `--timeout DURATION`.
+
+- Exactly one of `--text`, `--stdin`, `--file`, `--image` is required non-interactively
   (messages.go:70-87). Remote mutation.
 - `--text` (string): non-empty, valid UTF-8, at most 10,000 UTF-16 units (client.go:18, 29-40).
 - `--stdin` (bool): reads UTF-8 from stdin. Read limit is 40,000 bytes
@@ -166,16 +213,37 @@ line send [CHAT] --file PATH [--reply-to MESSAGE_ID] [--show-ids] [--json]
   files.go:25). The sent name is `filepath.Base(PATH)`; the name must not contain `/` or `\`
   or control characters (files.go:50-57). Images, video, and audio are sent as ordinary files
   (docs/CLI.md:249-250). Stickers and specialized media cannot be sent.
-- `--reply-to` (string): numeric message ID (actions.go:13-22; messages.go:65-69). Sets the
-  reply relation (client.go:356-360).
+- `--image` (path, v0.5.0): native still JPEG/PNG (converted to JPEG, metadata removed, at most
+  1280x1280). **Encrypted native images are disabled** (`encrypted_image_unavailable`), so this only
+  works where LINE explicitly allows non-E2EE images, and live delivery is unverified upstream.
+  No replies, mentions or text with it. Prefer `--file` for images.
+- `--reply-to` (string): numeric message ID. v0.5.0 verifies that the target is in this chat
+  before any upload or send, looking back at most 10 pages / 1000 messages / 30 s
+  (`message_not_found`, `lookup_incomplete`, `deadline_exceeded`; docs/CLI.md "Download or change
+  a message").
+- `--mentions` (JSON string, v0.5.0): explicit array, at most 100 entries, each
+  `{"start":S,"end":E,"mid":"USER_MID"}` or `{"start":S,"end":E,"all":true}`. `start` inclusive,
+  `end` exclusive, in UTF-16 code units of the exact text (😀 = 2 units). Spans cannot overlap or
+  split a surrogate pair; `all` needs a group or room. Text and stdin only (with or without
+  `--reply-to`); not with `--file`, `--image` or a prompted message. Literal `@name` text creates
+  no mention. Invalid input is rejected before the session is used. Mention metadata is outside the
+  encrypted text, as in LINE for Chrome (docs/CLI.md "List group members and mention someone").
+- `--require-e2ee` (bool, v0.5.0): send only with Letter Sealing; otherwise fail with
+  `encryption_required` before any remote action. **The skill passes it by default** (`lineq.py run
+  -- send`, `broadcast.py`); `--allow-non-e2ee` on those scripts drops it.
 - `--show-ids` (bool): human output adds `ID: <id>` and a group-key note
   (messages.go:183-195).
 - `--json` (bool): see json-schema.md (`send`).
-- Human success line: `Sent to <chat> · encrypted` (or `not encrypted (Letter Sealing unavailable)`).
+- Human receipt says `end-to-end encrypted` or `transport encrypted (no E2EE)`.
 - The CLI makes one send attempt. Result ambiguity messages are in errors.md.
 - Blocked contacts are refused before send (client.go:268-282).
-- Encryption fallback: plaintext is used only when Letter Sealing is explicitly unavailable
-  for that chat (client.go:295-329). Missing or malformed keys stop the send.
+- Encryption fallback (v0.5.0): sends prefer Letter Sealing. When LINE explicitly reports no
+  E2EE support for the chat (checked separately for text and for files), the CLI sends over
+  HTTPS/TLS **without asking**, also in `--json`/`--stdin` mode; LINE can read that content.
+  Missing or invalid capabilities, missing keys, incomplete membership and transport errors never
+  allow a downgrade. `--require-e2ee` blocks the fallback (docs/CLI.md "Send messages and files").
+- A non-E2EE file message is created before its bytes are uploaded; if the upload then fails,
+  the message exists (structured errors keep its ID). Check LINE before doing anything else.
 
 ## react
 
@@ -184,8 +252,9 @@ line react [CHAT] --message MESSAGE_ID --reaction REACTION [--json]
 line react [CHAT] --message MESSAGE_ID --remove [--json]
 ```
 
-- `--message` (string, required non-interactively): numeric message ID that must be within the
-  chat's latest 100 messages (actions.go:23; messaging/actions.go:41-58).
+- `--message` (string, required non-interactively): numeric message ID in this chat, found
+  within 10 pages / 1000 messages / 30 s of history (v0.5.0; `message_not_found`,
+  `lookup_incomplete` otherwise). Interactive choosers only list the latest 100.
 - `--reaction` (string): `like`, `love`, `laugh`, `surprise`, `sad`, `angry`, matched
   case-insensitively, or the matching emoji (actions.go:28; messaging/actions.go:24-31;
   pkg/line/reaction.go:106-123). Emoji IDs: like=2, love=3, laugh=4, surprise=5, sad=6, angry=7.
@@ -200,8 +269,8 @@ line react [CHAT] --message MESSAGE_ID --remove [--json]
 line unsend [CHAT] --message MESSAGE_ID [--json]
 ```
 
-- `--message` (string, required non-interactively): must be your own message, within the latest
-  100 messages (messaging/actions.go:93-95).
+- `--message` (string, required non-interactively): must be your own message, found within 10
+  pages / 1000 messages / 30 s of history (v0.5.0).
 - Remote mutation. Irreversible for everyone. The CLI prompts `Unsend this message for everyone? [y/N]`
   only in interactive mode (actions.go:74-82). A non-interactive call has no confirmation step, so
   the calling agent must confirm first (see safety.md).
@@ -214,7 +283,8 @@ line download [CHAT] --message MESSAGE_ID --output PATH [--json]
 line download CHAT --message MESSAGE_ID --output - | consumer
 ```
 
-- `--message` (string, required non-interactively): attachment message within the latest 100.
+- `--message` (string, required non-interactively): attachment message, found within 10 pages /
+  1000 messages / 30 s of history (v0.5.0).
 - `--output` (string, required non-interactively):
   - A new path. Existing paths are never overwritten (download.go:91-93). The CLI writes a
     temp file in the same directory and hard-links it into place (download.go:97-148), so a
@@ -223,7 +293,7 @@ line download CHAT --message MESSAGE_ID --output - | consumer
     (download.go:169-171). Cannot be combined with `--json` (download.go:166-168).
 - `--json` (bool): JSON summary `{path, bytes, message_id}` (download.go:151-157).
 - Supported types: image (1), video (2), audio (3), file (14), each at most 20 MiB
-  (files.go:28-43, 160-162). Two-minute transfer timeout (download.go:121).
+  (files.go:28-43, 160-162). Default command deadline 2 minutes (`--timeout` overrides it).
 - Not supported: messages with an external `DOWNLOAD_URL` (files.go:157-158). Other content
   types have status `unsupported`.
 - Encrypted media is authenticated before any byte is written (files.go:233-238).

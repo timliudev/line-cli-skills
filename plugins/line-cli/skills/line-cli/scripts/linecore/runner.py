@@ -28,7 +28,7 @@ from .config import Config, current_os, load_config_safe
 
 ENV_NO_COLOR = "NO_COLOR"
 READ_COMMANDS = frozenset(
-    {"chats", "contacts", "messages", "watch", "whoami", "version", "help", "download"}
+    {"chats", "contacts", "members", "messages", "watch", "whoami", "version", "help", "download"}
 )
 DEFAULT_TIMEOUT = 60.0
 DOWNLOAD_TIMEOUT = 150.0  # upstream transfer timeout is 2 minutes
@@ -247,10 +247,41 @@ _STDERR_RULES: tuple[tuple[str, str, bool, str | None], ...] = (
         False,
         "Text is limited to 10,000 UTF-16 units.",
     ),
+    (
+        "this send requires e2ee",
+        "encryption_required",
+        False,
+        "Nothing was sent: this chat has no end-to-end encryption (Letter Sealing), so LINE could "
+        "read the message. Tell the user; resend without --require-e2ee only if they explicitly "
+        "accept that.",
+    ),
+    (
+        "not found in available history",
+        "message_not_found",
+        False,
+        "The message is not in the history LINE still serves for this chat. Check the chat and ID.",
+    ),
+    (
+        "within the lookup budget",
+        "lookup_incomplete",
+        False,
+        "The target is older than the CLI's lookup budget (10 pages / 1000 messages / 30 s).",
+    ),
+    (
+        "history lookup deadline expired",
+        "lookup_incomplete",
+        False,
+        "The 30-second lookup budget ran out before the target was found.",
+    ),
     ("invalid options", "usage", False, "Check the flags with `line COMMAND --help`."),
     ("unexpected arguments", "usage", False, "Check the arguments with `line COMMAND --help`."),
     ("unknown command", "usage", False, "Run `line help` for the command list."),
-    ("provide exactly one of", "usage", False, "send takes exactly one of --text/--stdin/--file."),
+    (
+        "provide exactly one of",
+        "usage",
+        False,
+        "send takes exactly one of --text/--stdin/--file/--image.",
+    ),
     ("limit must be", "usage", False, None),
     ("dial tcp", "network", True, None),
     ("no such host", "network", True, None),
@@ -566,11 +597,15 @@ def run_line(
 
         error = classify_error(code, stderr, mutation=mutation, command=command)
 
-        # Partial result: messages / contacts --mid exit 1 but still wrote the full JSON.
+        # Partial result: messages / contacts --mid exit 1 but still wrote the full JSON (a list,
+        # or a `messages --page` / `--details` object with its `messages` list).
         if (
             code == 1
             and parsed
-            and isinstance(data, list)
+            and (
+                isinstance(data, list)
+                or (isinstance(data, dict) and isinstance(data.get("messages"), list))
+            )
             and command in {"messages", "contacts"}
             and "--json" in argv
         ):

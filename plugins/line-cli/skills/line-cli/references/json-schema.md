@@ -1,6 +1,6 @@
 # line-cli JSON output schema
 
-Matches line-cli v0.4.0 (verified 2026-10-12)
+Matches line-cli v0.5.0 (verified 2026-10-20)
 
 All `--json` output goes to stdout as one JSON document (pretty-printed, 2-space indent),
 except `watch`, which writes NDJSON (one object per line). Diagnostics go to stderr.
@@ -109,6 +109,11 @@ Prefix-based kind (human output, and useful when reading `id`): `u` = Direct, `c
 ## messages (item)
 
 `line messages CHAT --json` writes an array of message items (`internal/messaging/client.go:110-123`).
+`line messages CHAT --page --json` (v0.5.0) wraps the same items, newest first, in
+`{"schema_version":1,"chat_id":...,"order":"newest_first","messages":[...],"exhausted":bool,
+"stop_reason":"count_limit"|"page_limit"|"end_of_available_history","next_cursor":"..."}`;
+`next_cursor` is absent when `exhausted` is true. `--details` adds a separate, richer envelope
+(decoded `content`, `sender`, incoming `mentions`); see upstream docs/JSON.md "Detailed content".
 
 | Field | Type | Notes |
 | --- | --- | --- |
@@ -169,7 +174,7 @@ Error text examples (free text, may change): `letter sealing keys unavailable; r
 | --- | --- | --- |
 | `id` | string | Message ID assigned by LINE. |
 | `chat_id` | string | Resolved chat ID. |
-| `encrypted` | bool | False only when Letter Sealing was unavailable for the chat. |
+| `encrypted` | bool | Letter Sealing (E2EE). `false` means LINE reported no E2EE and the CLI sent over HTTPS/TLS only, so LINE can read it; the skill's default `--require-e2ee` makes that an `encryption_required` error instead. |
 | `group_key_registered` | bool | True only if this send registered a new group key. |
 | `request_sequence` | int | Persisted request sequence for this send. |
 

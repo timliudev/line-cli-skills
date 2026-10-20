@@ -1,6 +1,6 @@
 # broadcast.py and watch.py
 
-Matches line-cli v0.4.0 (verified 2026-10-14)
+Matches line-cli v0.5.0 (verified 2026-10-20)
 
 Two scripts built on the same primitives as `sync.py`: `broadcast.py` sends one message to many
 chats (dry run first), `watch.py` keeps the archive live from `line watch` and notifies for VIP
@@ -95,7 +95,8 @@ How it works:
 3. At start it syncs the archived chats too (`--no-initial-sync` skips that), which catches up
    whatever arrived while nothing was watching. `line watch` itself resumes from its saved
    checkpoint, so events that happened while `watch.py` was off are normally replayed as well; the
-   sync is the safety net, and it reports a `gap` when more than 100 messages were missed.
+   sync is the safety net: it pages back to the archive and reports a `gap` only when that took
+   more than `sync.py`'s page limit (10 pages, 1000 messages) or an older page failed.
 4. If `line watch` exits, it is started again after 2 s, then 4, 8 ... up to 120 s; a run that
    lasted a minute starts the backoff over. It does **not** restart for: another `line watch`
    already running (exit `3`, "only one watcher at a time"), a lost login (`not_logged_in`),
@@ -203,8 +204,9 @@ If the toast does not appear, check Windows notification settings for PowerShell
 
 ## Fallback: scheduled sync.py --all
 
-Without a permanent process, syncing on a schedule keeps gaps small as long as fewer than 100
-messages arrive per chat between runs (every 15 minutes in the example). Run `sync.py --all` through
+Without a permanent process, syncing on a schedule works as long as fewer than about 1000
+messages (sync's default `--max-pages 10`) arrive per chat between runs (every 15 minutes in the
+example). Run `sync.py --all` through
 Task Scheduler (`pythonw` is fine: the scripts tolerate having no console):
 
 ```
@@ -218,8 +220,9 @@ notifications; do not run both on the same chat at the same moment.
 
 ## Gaps and how to avoid them
 
-`line messages` returns the latest 100 messages and cannot page back. When a sync gets a full 100
-and the oldest of them is newer than the newest archived message, everything in between is lost for
-good: `sync.py` reports `gap` (`from`, `to`, in UTC), writes a marker into `messages.md` and records it
-in `state.json`. Nothing can fill it afterwards. Avoid it by syncing more often than 100 messages
-can arrive, or by running `watch.py`, which stores each message as it arrives.
+Since line v0.5.0 `sync.py` reads history in pages and keeps paging back until it reaches the
+newest archived message, so missed messages are normally filled in. A gap remains only when paging
+stopped first: after `--max-pages` pages (default 10, 1000 messages) or because an older page
+failed. `sync.py` then reports `gap` (`from`, `to`, in UTC), writes a marker into `messages.md` and
+records it in `state.json`. Run `sync.py CHAT --max-pages N` with a larger N to fetch the rest
+(the marker stays). Messages older than the history LINE still serves cannot be fetched at all.

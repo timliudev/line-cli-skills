@@ -58,12 +58,38 @@ def att(mid, minutes, content_type=1, sender=ALICE, file_name=None):
     return item
 
 
-def messages_rule(window, chat=CHAT):
-    """`window` is one list (every call) or a list of lists wrapped in Seq (one per call)."""
-    args = ["messages", chat, "--json", "--limit", "100"]
+def page_args(chat=CHAT, cursor=None):
+    args = ["messages", chat, "--page", "--json", "--limit", "100"]
+    return args + ["--cursor", cursor] if cursor else args
+
+
+def page(window, chat=CHAT, *, exhausted=None):
+    """A `messages --page --json` object. A short window counts as the end of the history unless
+    `exhausted` says otherwise; a page that is not the end carries `cursor:<oldest id>`."""
+    items = sorted(window, key=lambda m: (m.get("created_time") or 0, m["id"]), reverse=True)
+    if exhausted is None:
+        exhausted = len(items) < 100
+    out = {
+        "schema_version": 1,
+        "chat_id": chat,
+        "order": "newest_first",
+        "messages": items,
+        "exhausted": exhausted,
+        "stop_reason": "end_of_available_history" if exhausted else "count_limit",
+    }
+    if not exhausted:
+        out["next_cursor"] = "cursor:" + (items[-1]["id"] if items else "none")
+    return out
+
+
+def messages_rule(window, chat=CHAT, cursor=None):
+    """`window` is one list (every call) or a list of lists wrapped in Seq (one per call).
+
+    Without `cursor` this answers the newest page; with it, the page after that cursor."""
+    args = page_args(chat, cursor)
     if isinstance(window, Seq):
-        return rule(args, responses=[resp(0, w) for w in window.items])
-    return rule(args, stdout=window)
+        return rule(args, responses=[resp(0, page(w, chat)) for w in window.items])
+    return rule(args, stdout=page(window, chat))
 
 
 class Seq:

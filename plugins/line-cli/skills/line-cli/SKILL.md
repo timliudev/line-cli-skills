@@ -5,7 +5,7 @@ license: MIT
 compatibility: Requires the `line` binary from kongesque/line-cli (the skill can install it) and Python 3.11+. Windows, macOS and Linux.
 metadata:
   upstream: https://github.com/kongesque/line-cli
-  line-cli-version: v0.4.0
+  line-cli-version: v0.5.0
 ---
 
 # line-cli
@@ -105,7 +105,8 @@ each problem. More detail (login methods, Linux, updates) is in
    - A catch-up, a summary or a question about older messages: read the whole file, or its tail.
    - **Quick peek** without saving anything:
      `python "<SKILL_DIR>/scripts/lineq.py" run -- messages CHAT_ID --limit 20 --json`
-     (newest messages, oldest first; at most the latest 100 per chat; `data` is the list). Field
+     (newest messages, at most 100 per call; `data` is the list; older history comes in pages,
+     see `--page` in [references/commands.md](references/commands.md)). Field
      meanings and the `content_type` map: [references/json-schema.md](references/json-schema.md).
 3. **Answer the user** in their language, citing time and sender ("Anna, 14:03: ..."). Quote only
    what the task needs. Attachments appear in `messages.md` as links to files in the archive (next
@@ -127,8 +128,8 @@ For "who replied to my message X?" or "who reacted to it?":
    messages match: show them and ask, never pick. Exit `4`: not in the archive.
 3. Replies come from the `reply_to` field of other messages, and reactions from the `reactions`
    field of the target, both in `messages.jsonl`. Only messages that are in the archive can be
-   found: a reply or reaction LINE no longer returns (older than the latest 100 and never synced)
-   is invisible, so say so when the answer is "nobody" and the target is old.
+   found: a reply or reaction that was never synced (for example older than the archive) is
+   invisible, so say so when the answer is "nobody" and the target is old.
 4. LINE emoji reactions appear as a cached image or a label. If the meaning of one matters to the
    answer and it has no label (`emoji.py list --unlabeled`), open its PNG once, then save a short
    label with `python "<SKILL_DIR>/scripts/emoji.py" label PRODUCT_ID/EMOJI_ID "OK hand"`
@@ -154,8 +155,8 @@ why (`expired`, `over 20 MiB, not downloaded`, `external link`).
   installing the `media-digest` plugin lets the agent understand video and audio.
 - Other files: report the name and path, and read them only if the user asks and the type is readable.
 
-An attachment that is not in the archive (older than the latest 100 messages, or skipped) can
-still be fetched once, to a **new file outside any repo** (existing paths are never overwritten and
+An attachment that is not in the archive (older than the archive, or skipped) can
+still be fetched once (line looks it up in up to 10 pages / 1000 messages / 30 s of history), to a **new file outside any repo** (existing paths are never overwritten and
 the folder must exist):
 `python "<SKILL_DIR>/scripts/lineq.py" run -- download CHAT_ID --message MESSAGE_ID --output PATH --json`
 Give the file an extension that matches `content_type` (1 image `.jpg`, 2 video `.mp4`,
@@ -184,11 +185,21 @@ for real. Read [references/safety.md](references/safety.md) before the first wri
      ```
      lineq forwards stdin automatically when the `line` arguments contain `--stdin`. stdin is not trimmed, so a trailing newline is part of the message. Add `--reply-to MESSAGE_ID`
      to reply.
-   - File: `run --yes -- send CHAT_ID --file PATH --json` (generic file, up to 20 MiB).
+   - **End-to-end encryption is required by default.** lineq adds `--require-e2ee` to every
+     `send`. Without it, line v0.5.0 silently falls back to HTTPS/TLS when LINE reports that a chat
+     has no end-to-end encryption (Letter Sealing), and LINE can then read the message. If the send
+     fails with `encryption_required`, nothing was sent: tell the user that this chat has no
+     end-to-end encryption and that LINE could read the message. Only after an explicit yes to
+     exactly that, run it once more with `run --yes --allow-non-e2ee -- send ...`. Never add
+     `--allow-non-e2ee` on your own.
+   - File: `run --yes -- send CHAT_ID --file PATH --json` (generic file, up to 20 MiB). File
+     encryption support is checked separately from text, so a chat can take encrypted text but
+     fail a file with `encryption_required`.
    - Reaction: `run --yes -- react CHAT_ID --message MESSAGE_ID --reaction like --json`
      (`like love laugh surprise sad angry`; `--remove` instead of `--reaction` removes yours).
    - Unsend: `run --yes -- unsend CHAT_ID --message MESSAGE_ID --json`. Irreversible, own messages
-     only, within the latest 100.
+     only; line finds it within 10 pages / 1000 messages / 30 s of history
+     (`message_not_found` or `lookup_incomplete` otherwise).
 4. **Never retry.** Writes get exactly one attempt. If the result is an error or the response was
    lost (timeout, exit 130/143), the message may still have gone out: read the recent messages
    first and tell the user what you find. Only try again after a new explicit yes
@@ -197,15 +208,17 @@ for real. Read [references/safety.md](references/safety.md) before the first wri
    anything reaches LINE, so nothing was sent. Say so, wait a few seconds, and send again only
    after the user confirms again. This happens while `watch.py` is syncing.
 
-Sending works (verified live: text to a direct chat, end-to-end encrypted). Known upstream limit: `send`
-fails for some peers whose Letter Sealing key is an old version (LINE rejects it, shown only as a
-generic "request failed"). Tell the user it was NOT sent, do not retry, and suggest
-sending from the LINE app ([references/errors.md](references/errors.md), "Known upstream bugs").
+Sending works (verified live on v0.4.0: text to a direct chat; on v0.5.0: text, a mention after an
+emoji, @All and a reply to an older message in a group; all end-to-end encrypted). Known upstream
+limit on v0.4.0, not re-tested on v0.5.0: `send` fails for some peers whose Letter Sealing key is an
+old version (LINE rejects it, shown only as a generic "request failed"). Tell the user it was NOT
+sent, do not retry, and suggest sending from the LINE app
+([references/errors.md](references/errors.md), "Known upstream bugs").
 
 ### Replying to a specific message
 
 Users say things like "reply to Alice's last message with OK". `--reply-to` uses the same send path
-as plain `send` (not separately verified live).
+as plain `send` (verified live on v0.5.0, including an older target).
 
 1. Sync the chat first (`sync.py`) so `messages.jsonl` is current.
 2. Find the target in `messages.jsonl` by sender name, quoted text, time, or "last message from X".
@@ -214,10 +227,9 @@ as plain `send` (not separately verified live).
    unsupported content). Identify it by type + sender + time, e.g. "the photo 阿明 sent at 01:28"
    (`content_type`, sender, `created_time`). If several match or none do, ask the user; show
    candidates with type, time, sender and first line.
-3. `--reply-to` only validates the ID format; it does not check the latest-100 window (that limit
-   applies to react/unsend/download). The target is looked up in the local archive, so older
-   archived messages can be targeted too. Whether LINE renders a quote for a very old target is
-   not verified; say so if the target is old.
+3. line verifies the target before sending: it must be in this chat within 10 pages / 1000
+   messages / 30 s of history (`message_not_found` or `lookup_incomplete` otherwise; nothing was
+   sent). An older archived message therefore cannot be replied to; say so.
 4. The confirmation must show the quoted original (time, sender, first line), the reply text and the
    chat. Wait for an explicit yes.
 5. Then run once:
@@ -228,9 +240,23 @@ as plain `send` (not separately verified live).
    ```
    A reply can itself be a file: `run --yes -- send CHAT_ID --file PATH --reply-to MESSAGE_ID --json`.
 
-**@mentions are not supported.** upstream line-cli has no MENTION metadata, so "@name" in the text
-is sent as plain text: not highlighted, and the person is not notified. If the user's text contains
-an @mention meant as a real mention, tell them plainly before sending and let them decide.
+### Mentioning someone (@name)
+
+Typing "@name" in the text alone is plain text: not highlighted, and nobody is notified. A real
+mention needs `--mentions` (groups and rooms; text or stdin sends only, not files or images):
+
+1. Get the member's user ID: `python "<SKILL_DIR>/scripts/lineq.py" run -- members CHAT_ID --json`
+   (`data.members[]` has `mid`, `name`, `self`). Match the name exactly; if several or none match,
+   ask the user.
+2. Write the text with the visible `@Name`, and build the spans over that exact text: `start`
+   inclusive, `end` exclusive, in **UTF-16 code units** (an emoji such as 😀 counts 2). Compute
+   them with a script instead of counting by hand, for example in Python
+   `len(text[:i].encode("utf-16-le")) // 2`. Mention everyone with `{"start":0,"end":4,"all":true}`
+   over `@All`.
+3. Show the user the text and who is mentioned, then send once:
+   `run --yes -- send CHAT_ID --stdin --mentions '[{"start":3,"end":9,"mid":"USER_MID"}]' --json`
+   with the text on stdin (a heredoc, as for any send) exactly as measured.
+   line rejects overlapping or misplaced spans before anything is sent.
 
 Never use a write command to "test" something, and never loop over several chats without the user
 naming each one. The only way to message several chats at once is `broadcast.py` (next section),
@@ -295,9 +321,10 @@ do not paste raw output. If `setup.py --check` shows the installed `line` versio
 
 ## Sync and archive
 
-`line` stores no messages, so `sync.py` keeps them. One run fetches the latest 100 messages of a
-chat, adds the new ones to a local archive and downloads new attachments right away (LINE expires
-them, and only the latest 100 messages can be reached at all).
+`line` stores no messages, so `sync.py` keeps them. One run reads the chat's history in pages of
+100, newest first, and keeps paging back until it reaches the newest archived message (at most
+`--max-pages`, default 10), so messages missed since the last sync are filled in. It adds the new
+ones to a local archive and downloads new attachments right away (LINE expires them).
 
 ```
 python "<SKILL_DIR>/scripts/sync.py" CHAT        # a name or a full ID
@@ -305,28 +332,31 @@ python "<SKILL_DIR>/scripts/sync.py" --all       # every chat, one after another
 ```
 
 Options: `--types image,video,audio,file`, `--max-bytes N`, `--no-download` (text only), `--name
-LABEL` (folder label when CHAT is an ID). Exit codes are the shared ones: `3` means the name is
+LABEL` (folder label when CHAT is an ID), `--max-pages N` (history pages per run, default 10),
+`--backfill` (keep paging back until LINE has no older history, bounded by `--max-pages`; use it
+when the user wants older history than the archive has). Exit codes are the shared ones: `3` means the name is
 ambiguous (ask the user, then use the full ID), `4` nothing found, `1` failure (`error.kind`). With
 `--all`, one failing chat does not stop the others (exit `1`, listed under `failed`).
 
 The summary JSON has `chat`, `chat_id`, `archive_dir`, `messages_md`, `new_messages`,
-`new_messages_from_line`, `new_files[]`, `failed_files[]`, `possibly_unsent[]`, `gap_possible`,
+`new_messages_from_line`, `pages`, `new_files[]`, `failed_files[]`, `possibly_unsent[]`, `gap_possible`,
 `gap` and `warnings[]`. Act on it:
 
-- `gap_possible: true` with `gap` (`from`, `to`, `after_id`, `before_id`; times are UTC): the
-  chat returned a full 100 messages and the oldest is newer than the newest archived one, so the
-  messages between `from` and `to` are **permanently unrecoverable** (the CLI cannot page back).
-  Tell the user once, plainly, with the time range, and say the fix is syncing more often or
-  running `watch.py` (next section); the gap cannot be filled afterwards. `gap` is `null` when
-  there is none.
-- `possibly_unsent`: these archived messages vanished from LINE's latest 100, so they were probably
+- `gap_possible: true` with `gap` (`from`, `to`, `after_id`, `before_id`; times are UTC): paging
+  stopped before it reached the archive, so the messages between `from` and `to` were not fetched.
+  The warning says why: `--max-pages` was reached (sync again with a higher `--max-pages`), or an
+  older page failed (sync again later; if it keeps failing, LINE no longer serves them). Tell the
+  user once, plainly, with the time range. `gap` is `null` when there is none.
+- `possibly_unsent`: these archived messages vanished from the range LINE returned, so they were probably
   unsent (a guess). `messages.md` keeps the text and marks it "(possibly unsent)". Mention it if the
   user asks about those messages; never present it as certain.
 - `failed_files`: say which attachments could not be saved and why.
 - `warnings`: relay anything that matters. An archive inside a git repository is a privacy risk:
   tell the user to move `archive_root` outside the repo, and never stage or commit archive files.
 
-Sync only reads from LINE. The first sync of a chat can only reach its latest 100 messages. It is
+Sync only reads from LINE. The first sync of a chat reads one page (the latest 100 messages)
+unless `--backfill` is given. LINE serves only the history still available to this client; there
+is no guaranteed full history. It is
 safe to run before every question about a chat, and the user can also ask for it directly
 ("update my LINE archive"). Archive layout, settings and limits:
 [references/archive.md](references/archive.md).
@@ -339,7 +369,7 @@ afterwards updates that chat's `messages.md` **from the local files, without cal
 (so plain text messages leave LINE's session free). A full sync (which does call `line`) runs
 only when a new message has an attachment to download, a sender or chat name is unknown, when it
 starts, and whenever LINE sends `resync_required`; that is how a message missed while it was not
-running is caught up, as long as it is still inside the latest 100.
+running is caught up (sync pages back to the archive, up to its page limit).
 
 **Privacy default: only chats the user chose are stored.** A chat counts as archived when it already
 has an archive folder (the user synced it before), or is listed under `[watch] archive_chats` in

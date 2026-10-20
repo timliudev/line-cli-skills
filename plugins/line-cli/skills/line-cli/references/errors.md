@@ -1,6 +1,6 @@
 # line-cli exit codes and error messages
 
-Matches line-cli v0.4.0 (verified 2026-10-12)
+Matches line-cli v0.5.0 (verified 2026-10-20)
 
 Upstream sources: `cmd/line/signals.go:51-77` (exit mapping), `internal/session/storage_control.go:76-152`
 (`StorageReason` and `StorageExitCode`), `internal/messaging/*.go`, `internal/cli/*.go`,
@@ -82,7 +82,8 @@ message list and inform the user. Do not resend the file as a new message until 
 | `provide a chat ID or exact name; run line chats to find one` | 1 | Empty or control-character selector. Supply a valid one. |
 | `use a LINE chat ID from line chats or line contacts` | 1 | The `id:` form or the ID does not match the expected pattern. Use the exact ID from `line chats --json`. |
 | `use a numeric message ID from line messages` | 1 | Message IDs are digits only. Copy from `--show-ids` or `--json`. |
-| `message was not found in the selected chat's 100 most recent messages` | 1 | The target is older than the last 100 messages (react, unsend, download). Tell the user; a newer message or a different target is needed. |
+| `Message was not found in available history of the selected chat (N messages checked); older history may be unavailable.` (`message_not_found`) | 1 | react, unsend, download, `send --reply-to`: the target is not in the history LINE still serves for this chat. Check the chat and the ID; nothing was changed. |
+| `Message was not found within the lookup budget (10 pages, N messages checked; ...)` / `History lookup deadline expired after ...` (`lookup_incomplete`) | 1 | The target is older than the CLI's lookup budget (10 pages / 1000 messages / 30 s). Nothing was changed. Tell the user; the action cannot reach it. |
 | `only your own messages can be unsent` | 1 | Do not try again. Only your own MID can be unsent. |
 | `your account changed while choosing; run the command again` | 1 | The session changed during an interactive prompt. Rerun the command. |
 
@@ -117,6 +118,8 @@ message list and inform the user. Do not resend the file as a new message until 
 
 | Stderr message (abridged) | Exit | What to do |
 | --- | --- | --- |
+| `This chat doesn't support end-to-end encryption for this message/file. Nothing was sent. This send requires E2EE. ...` (`encryption_required`) | 1 | Nothing was sent: the skill passed `--require-e2ee` and LINE reports no E2EE for this chat (text and files are checked separately). Tell the user that LINE could read the message if it goes out without E2EE; only after an explicit yes run it once with `lineq.py run --yes --allow-non-e2ee -- send ...` (`broadcast.py --allow-non-e2ee` for a broadcast, which needs a new dry run). |
+| `encrypted_image_unavailable` | 1 | `send --image` with encryption is disabled upstream. Nothing was sent. Use `--file` instead. |
 | `contact is blocked on LINE; unblock them on your phone before sending` | 1 | Nothing was sent. The user must unblock on the phone. |
 | `could not verify blocked contacts; message was not sent` | 1 | Nothing was sent. Treat as a read failure; ask before retrying the send. |
 | `could not prepare encrypted message; nothing was sent; check chat membership and Letter Sealing keys` | 1 | Nothing was sent. Tell the user about the key or membership problem. |
@@ -214,15 +217,17 @@ the matching code. Read `reason` in that object (see json-schema.md).
 
 ## Known upstream bugs
 
-Confirmed live on line-cli v0.4.0 with a debug build. Decision: parked, no upstream issue or PR for
-now. Both hide their cause behind the generic `LINE request failed; check your connection and LINE
+Confirmed live on line-cli v0.4.0 with a debug build; not re-tested on v0.5.0. Decision: parked, no
+upstream issue or PR for now. Both hide their cause behind the generic `LINE request failed; check your connection and LINE
 account settings`, so a "connection" message here is usually not a connection problem.
 
 ### `send` to some peers with old Letter Sealing keys fails (e2ee version mismatch)
 
 Scope: `send` works in general (verified live 2026-10-13 on Windows, line-cli v0.4.0: a text message to
 a direct chat was delivered end-to-end encrypted, via `lineq.py run --yes -- send <id> --stdin --json`).
-`--reply-to` uses the same send path but was not separately verified live. Known limit: @mentions are not supported (no MENTION metadata upstream), so "@name" is sent as plain text with no highlight or notification. Only the case below fails.
+Re-verified live 2026-10-20 on line-cli v0.5.0 in a group: plain text, `--mentions` (a user span after
+an emoji, and `all:true`), and `--reply-to` an older message, all end-to-end encrypted and read back
+with `messages --details --json`. Only the case below fails.
 
 - **Symptom:** `line send` to certain direct (1:1) chats (peers with an old key version) fails with exit 1. LINE answers HTTP 400,
   envelope code 10051, TalkException code 86 `sender or receiver not supported e2ee or version
@@ -251,5 +256,5 @@ a direct chat was delivered end-to-end encrypted, via `lineq.py run --yes -- sen
 
 - Writes: `send`, `react`, `unsend`, file upload, `login`, `logout`, `auth migrate`, `update`
   install. Never loop on these. Check state first, then ask the user.
-- Reads: `whoami`, `contacts`, `chats`, `messages`, `download`, `watch` (reconnects itself), `auth status`,
+- Reads: `whoami`, `contacts`, `chats`, `members`, `messages`, `download`, `watch` (reconnects itself), `auth status`,
   `update --check`. A single bounded retry is fine. Exit 75 on a read is the only case that calls for waiting.

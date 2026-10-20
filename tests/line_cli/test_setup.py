@@ -20,7 +20,7 @@ def call(argv, capsys):
     return code, json.loads(out)
 
 
-def healthy(fake_line, version="line v0.4.0\n", update=None):
+def healthy(fake_line, version="line v0.5.0\n", update=None):
     fake_line.scenario(
         [
             rule(["version"], stdout=version),
@@ -28,7 +28,7 @@ def healthy(fake_line, version="line v0.4.0\n", update=None):
             rule(["auth", "status", "--json"], stdout={"reason": "ok", "backend": "keychain"}),
             rule(
                 ["update", "--check", "--json"],
-                stdout=update or {"status": "up_to_date", "current_version": "v0.4.0"},
+                stdout=update or {"status": "up_to_date", "current_version": "v0.5.0"},
             ),
         ]
     )
@@ -48,7 +48,7 @@ def test_check_logged_in(fake_line, capsys):
     healthy(fake_line)
     code, out = call(["--check"], capsys)
     assert code == 0
-    assert out["line"]["found"] and out["line"]["version"] == "v0.4.0"
+    assert out["line"]["found"] and out["line"]["version"] == "v0.5.0"
     assert out["line"]["version_matches_docs"] is True
     assert out["logged_in"] is True and out["next_step"] == "ready"
     assert out["account"] == {"display_name": "Tim"}
@@ -66,7 +66,7 @@ def no_keyring_check(monkeypatch):
 def test_check_logged_out(fake_line, capsys, no_keyring_check):
     fake_line.scenario(
         [
-            rule(["version"], stdout="line v0.4.0"),
+            rule(["version"], stdout="line v0.5.0"),
             rule(["whoami", "--json"], responses=[NOT_LOGGED_IN]),
         ]
     )
@@ -77,7 +77,7 @@ def test_check_logged_out(fake_line, capsys, no_keyring_check):
 def test_check_unknown_login_state_when_busy(fake_line, capsys, monkeypatch, no_keyring_check):
     monkeypatch.setattr(runner, "_sleep", lambda s: None)
     fake_line.scenario(
-        [rule(["version"], stdout="line v0.4.0"), rule(["whoami", "--json"], responses=[BUSY])]
+        [rule(["version"], stdout="line v0.5.0"), rule(["whoami", "--json"], responses=[BUSY])]
     )
     _, out = call(["--check"], capsys)
     assert out["logged_in"] is None and out["login_error"] == "busy"
@@ -95,7 +95,7 @@ def test_check_linux_keyring_missing(fake_line, capsys, monkeypatch):
     monkeypatch.setattr(setup, "_which", lambda name: None)
     fake_line.scenario(
         [
-            rule(["version"], stdout="line v0.4.0"),
+            rule(["version"], stdout="line v0.5.0"),
             rule(["whoami", "--json"], responses=[NOT_LOGGED_IN]),
             rule(
                 ["auth", "status", "--json"],
@@ -114,7 +114,7 @@ def test_check_linux_keyring_ok_even_without_session(fake_line, capsys, monkeypa
     monkeypatch.setattr(setup, "_which", lambda name: "/usr/bin/secret-tool")
     fake_line.scenario(
         [
-            rule(["version"], stdout="line v0.4.0"),
+            rule(["version"], stdout="line v0.5.0"),
             rule(["whoami", "--json"], responses=[NOT_LOGGED_IN]),
             rule(
                 ["auth", "status", "--json"],
@@ -194,10 +194,10 @@ def test_install_without_yes_only_prints_plan(os_name, method, capsys, monkeypat
     plan = out["plan"]
     assert plan["method"] == method and plan["needs_admin"] is False
     assert plan["script_url"] == (
-        f"https://raw.githubusercontent.com/kongesque/line-cli/v0.4.0/scripts/{method}"
+        f"https://raw.githubusercontent.com/kongesque/line-cli/v0.5.0/scripts/{method}"
     )
     assert plan["script_hash_pinned"] is True and len(plan["script_sha256"]) == 64
-    assert plan["release_base"] == "https://github.com/kongesque/line-cli/releases/download/v0.4.0"
+    assert plan["release_base"] == "https://github.com/kongesque/line-cli/releases/download/v0.5.0"
     assert plan["explain"] and out["rerun"].endswith("--install --yes")
 
 
@@ -244,7 +244,7 @@ def test_install_windows_runs_pinned_script(fake_line, capsys, monkeypatch):
     script = b"# pretend installer\n"
     monkeypatch.setitem(
         setup.PINNED_SCRIPT_SHA256,
-        "v0.4.0",
+        "v0.5.0",
         {"install-release.ps1": hashlib.sha256(script).hexdigest()},
     )
     monkeypatch.setattr(setup, "current_os", lambda: "windows")
@@ -266,26 +266,26 @@ def test_install_windows_runs_pinned_script(fake_line, capsys, monkeypatch):
         "_which",
         lambda n: real_which(n) or ("powershell.exe" if n == "powershell" else None),
     )
-    fake_line.scenario([rule(["version"], stdout="line v0.4.0")])
+    fake_line.scenario([rule(["version"], stdout="line v0.5.0")])
     code, out = call(["--install", "--yes"], capsys)
 
     assert code == 0, out
     assert urls == [
-        "https://raw.githubusercontent.com/kongesque/line-cli/v0.4.0/scripts/install-release.ps1"
+        "https://raw.githubusercontent.com/kongesque/line-cli/v0.5.0/scripts/install-release.ps1"
     ]
     cmd, env, content = ran[0]
     assert cmd[0].lower().startswith("powershell")
     assert cmd[cmd.index("-ExecutionPolicy") + 1] == "Bypass" and "-File" in cmd
     assert (
         env["LINE_CLI_DOWNLOAD_BASE"]
-        == "https://github.com/kongesque/line-cli/releases/download/v0.4.0"
+        == "https://github.com/kongesque/line-cli/releases/download/v0.5.0"
     )
     assert content == script
     # Git Bash's GNU tar must not shadow Windows' bsdtar: System32 leads PATH for the installer
     path_key = next(k for k in env if k.upper() == "PATH")
     assert env[path_key].split(";")[0].lower().endswith("system32")
     assert not any("sudo" in part for part in cmd)
-    assert out["status"] == "installed" and out["line"]["version"] == "v0.4.0"
+    assert out["status"] == "installed" and out["line"]["version"] == "v0.5.0"
     assert out["verification"]["installer_script_sha256"].startswith("verified")
     assert "SHA256SUMS" in out["verification"]["release_archive"]
     assert out["line"]["source"] == "known"  # not on PATH in this session, still usable
@@ -354,7 +354,7 @@ def test_install_linux_never_sudo_and_reports_keyring(fake_line, capsys, monkeyp
     script = b"#!/bin/sh\n"
     monkeypatch.setitem(
         setup.PINNED_SCRIPT_SHA256,
-        "v0.4.0",
+        "v0.5.0",
         {"install-release.sh": hashlib.sha256(script).hexdigest()},
     )
     monkeypatch.setattr(setup, "current_os", lambda: "linux")
@@ -373,7 +373,7 @@ def test_install_linux_never_sudo_and_reports_keyring(fake_line, capsys, monkeyp
     monkeypatch.setattr(setup, "_run_installer", fake_installer)
     fake_line.scenario(
         [
-            rule(["version"], stdout="line v0.4.0"),
+            rule(["version"], stdout="line v0.5.0"),
             rule(
                 ["auth", "status", "--json"],
                 exit=69,
@@ -387,14 +387,14 @@ def test_install_linux_never_sudo_and_reports_keyring(fake_line, capsys, monkeyp
     assert code == 3 and out["status"] == "needs_user_action"
     action = out["needs_user_action"][0]
     assert action["command"].startswith("sudo ") and "gnome-keyring" in action["command"]
-    assert out["line"]["version"] == "v0.4.0"
+    assert out["line"]["version"] == "v0.5.0"
 
 
 def test_install_linux_without_curl_asks_user(capsys, monkeypatch):
     script = b"#!/bin/sh\n"
     monkeypatch.setitem(
         setup.PINNED_SCRIPT_SHA256,
-        "v0.4.0",
+        "v0.5.0",
         {"install-release.sh": hashlib.sha256(script).hexdigest()},
     )
     monkeypatch.setattr(setup, "current_os", lambda: "linux")
@@ -411,7 +411,7 @@ def test_install_failure_is_reported(capsys, monkeypatch):
     script = b"x"
     monkeypatch.setitem(
         setup.PINNED_SCRIPT_SHA256,
-        "v0.4.0",
+        "v0.5.0",
         {"install-release.ps1": hashlib.sha256(script).hexdigest()},
     )
     monkeypatch.setattr(setup, "current_os", lambda: "windows")
@@ -478,14 +478,14 @@ def test_doctor_not_logged_in_and_old_version_and_update(fake_line, capsys):
     items = by_id(report)
     assert code == 1
     assert items["login"]["status"] == "fail" and "login.py" in items["login"]["fix"]
-    assert items["version"]["status"] == "warn" and "v0.4.0" in items["version"]["explain"]
+    assert items["version"]["status"] == "warn" and "v0.5.0" in items["version"]["explain"]
     assert items["update"]["status"] == "warn" and items["update"]["fix"] == "brew upgrade line-cli"
 
 
 def test_doctor_update_check_offline_is_only_a_warning(fake_line, capsys, no_keyring_check):
     fake_line.scenario(
         [
-            rule(["version"], stdout="line v0.4.0"),
+            rule(["version"], stdout="line v0.5.0"),
             rule(["whoami", "--json"], stdout=WHOAMI_OK),
             rule(["update", "--check", "--json"], exit=1, stderr="line: dial tcp: no such host"),
         ]

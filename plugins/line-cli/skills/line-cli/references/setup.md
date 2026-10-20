@@ -1,6 +1,6 @@
 # line-cli setup
 
-Matches line-cli v0.4.0 (verified 2026-10-12)
+Matches line-cli v0.5.0 (verified 2026-10-20)
 
 Setup covers installing the `line` binary, signing in, where the session is stored, how tokens
 refresh, Linux keyring and headless storage, checking for updates, and product limits.
@@ -247,14 +247,22 @@ line update                # installs when supported; otherwise prints the next 
 
 ## Limits
 
-- Message history: the latest 100 messages only, per read (`docs/CLI.md:791`). Older messages are not
-  reachable by the CLI, so react, unsend, and download can only target the latest 100.
+- Message history: at most 100 messages per read; older available history comes in pages with
+  `messages --page --json` and a cursor. Neither full history nor a fixed retention period is
+  guaranteed (docs/CLI.md "History pagination JSON"). react, unsend, download and `send --reply-to`
+  look up their target within 10 pages / 1000 messages / 30 s (docs/CLI.md "Current limitations").
 - Attachments: up to 20 MiB for `send --file` and for `download` (`docs/CLI.md:249`, `docs/CLI.md:283-284`).
 - Text: up to 10,000 UTF-16 units per message (`internal/messaging/client.go:18`).
 - Stdin input: up to 40,000 bytes, not trimmed (`internal/cli/messages.go:118-124`).
 - External media URLs are not downloadable (`docs/CLI.md:286`, `internal/messaging/files.go:157-158`).
-- Sending: generic files only. Images, video, and audio go as ordinary files. Stickers and specialized media
-  cannot be sent (`docs/CLI.md:249-250`, `docs/CLI.md:792`).
+- Sending: generic files; images, video and audio sent with `--file` go as ordinary files. Encrypted
+  native images (`--image`) are disabled; non-E2EE JPEG/PNG images need explicit LINE support.
+  Native audio/video, animated images, image replies and stickers cannot be sent
+  (docs/CLI.md "Current limitations").
+- Encryption: sends prefer Letter Sealing; when LINE reports a chat has no E2EE, the CLI falls back
+  to HTTPS/TLS without asking, and LINE can read that content. The skill passes `--require-e2ee` by
+  default (see safety.md).
+- Mentions: `send --mentions` with explicit UTF-16 spans and user MIDs from `line members`.
 - Reading does not mark messages as read (`docs/CLI.md:234`, `docs/CLI.md:795`).
 - Some older encrypted messages may be unavailable if LINE no longer provides the original device keys
   (`docs/CLI.md:234-236`).

@@ -44,10 +44,14 @@ EXIT_OK, EXIT_FAIL, EXIT_USAGE, EXIT_USER = 0, 1, 2, 3
 # SHA-256 of scripts/install-release.{ps1,sh} at the pinned tag (git show TAG:path | sha256sum).
 # Re-compute both whenever LINE_CLI_VERSION is bumped.
 PINNED_SCRIPT_SHA256 = {
+    "v0.5.0": {
+        "install-release.ps1": "7bf73c2db8d8c5e2156d58b69ddc897446dd8775019057362803679c4c47e2f9",
+        "install-release.sh": "8a515241793147330c1c491f65271dee034c6bfe8184de3b4ce5b015b7bceb92",
+    },
     "v0.4.0": {
         "install-release.ps1": "7bf73c2db8d8c5e2156d58b69ddc897446dd8775019057362803679c4c47e2f9",
         "install-release.sh": "8a515241793147330c1c491f65271dee034c6bfe8184de3b4ce5b015b7bceb92",
-    }
+    },
 }
 MAX_SCRIPT_BYTES = 256 * 1024
 TAG_RE = re.compile(r"^v\d+\.\d+\.\d+$")

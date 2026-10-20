@@ -319,3 +319,37 @@ def test_cli_rejects_bad_numbers(flag):
         text=True,
     )
     assert proc.returncode == 2
+
+
+def test_cli_run_send_requires_e2ee_by_default(fake_line):
+    fake_line.scenario([rule(prefix=["send"], stdout={"id": "m1"})])
+    code, _, _ = run_cli("run", "--yes", "--", "send", UID, "--stdin", "--json", stdin="hi")
+    assert code == 0
+    assert fake_line.argv_calls()[0] == ["send", UID, "--stdin", "--json", "--require-e2ee"]
+
+
+def test_cli_run_allow_non_e2ee_drops_the_guard(fake_line):
+    fake_line.scenario([rule(prefix=["send"], stdout={"id": "m1"})])
+    code, _, _ = run_cli(
+        "run", "--yes", "--allow-non-e2ee", "--", "send", UID, "--stdin", "--json", stdin="hi"
+    )
+    assert code == 0 and fake_line.argv_calls()[0] == ["send", UID, "--stdin", "--json"]
+
+
+def test_e2ee_policy_leaves_other_commands_and_explicit_flags_alone():
+    assert lineq.with_e2ee_policy(["react", UID], allow_non_e2ee=False) == ["react", UID]
+    explicit = ["send", UID, "--text", "x", "--require-e2ee"]
+    assert lineq.with_e2ee_policy(explicit, allow_non_e2ee=False) == explicit
+
+
+def test_cli_run_reports_encryption_required(fake_line):
+    stderr = (
+        "line: This chat doesn't support end-to-end encryption for this message. "
+        "Nothing was sent.\n"
+        "This send requires E2EE. Use the default send policy to allow HTTPS/TLS delivery "
+        "(LINE can read the message)."
+    )
+    fake_line.scenario([rule(prefix=["send"], exit=1, stderr=stderr)])
+    code, out, _ = run_cli("run", "--yes", "--", "send", UID, "--text", "hi", "--json")
+    assert code == 1 and out["error"]["kind"] == "encryption_required"
+    assert "LINE could read" in out["error"]["hint"]

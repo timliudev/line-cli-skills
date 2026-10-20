@@ -273,6 +273,19 @@ def _guard(line_args: list[str], yes: bool) -> dict[str, Any] | None:
     return None
 
 
+def with_e2ee_policy(line_args: list[str], *, allow_non_e2ee: bool) -> list[str]:
+    """Add ``--require-e2ee`` to ``send`` unless the user accepted a non-E2EE send.
+
+    Since v0.5.0 `line send` silently falls back to HTTPS/TLS when LINE reports that a chat has
+    no end-to-end encryption, and LINE can then read the content. The skill blocks that by default.
+    """
+    if not line_args or line_args[0] != "send" or allow_non_e2ee:
+        return line_args
+    if runner._flag_true(line_args[1:], "require-e2ee"):
+        return line_args
+    return [*line_args, "--require-e2ee"]  # line wants options after the chat
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="lineq.py",
@@ -299,6 +312,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run.add_argument(
         "--yes", action="store_true", help="the user has approved this state-changing command"
+    )
+    run.add_argument(
+        "--allow-non-e2ee",
+        action="store_true",
+        help="send: drop the default --require-e2ee (LINE can read non-E2EE content); "
+        "only after the user explicitly accepted that",
     )
     run.add_argument(
         "--max-attempts",
@@ -329,6 +348,8 @@ def main(argv: list[str] | None = None) -> int:
     if problem:
         runner.emit({"ok": False, "exit_code": None, "data": None, "error": problem})
         return EXIT_DECIDE if problem["kind"] == "confirmation_required" else EXIT_USAGE
+
+    line_args = with_e2ee_policy(line_args, allow_non_e2ee=args.allow_non_e2ee)
 
     # `send --stdin` reads its text from stdin; forward ours even when lineq's own flag was omitted
     forward_stdin = args.stdin or ("--stdin" in line_args and not sys.stdin.isatty())

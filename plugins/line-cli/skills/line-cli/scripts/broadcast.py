@@ -2,7 +2,7 @@
 """broadcast - send one message to many LINE chats, safely (dry run by default).
 
 Usage
-  broadcast.py --recipients FILE (--text TEXT | --stdin) [--file PATH]          # dry run
+  broadcast.py --recipients FILE (--text TEXT | --stdin) [--file PATH] [--allow-non-e2ee]  # dry run
   broadcast.py --recipients FILE (--text TEXT | --stdin) [--file PATH] --yes --plan HASH
   (--plan is the `plan` value of the dry run and is required with --yes)
 
@@ -16,6 +16,10 @@ names, incomplete lookups (use the full ID), several matches and no match are li
 `unresolved` and the exit code is not 0. With --yes the messages are sent one after another with a
 pause between recipients. The first failure stops the run, nothing is ever retried, and every
 recipient is reported as sent, failed or not_attempted.
+
+Every send carries `--require-e2ee`: a chat without end-to-end encryption fails with
+`encryption_required` and nothing is sent to it. `--allow-non-e2ee` (part of the plan) drops that
+guard so LINE's HTTPS/TLS fallback is used, which LINE can read.
 
 Exit codes
   0  dry run: all recipients resolved / --yes: everything was sent
@@ -65,6 +69,7 @@ NOTHING_SENT = {
     "ambiguous_name",
     "name_not_found",
     "watcher_running",
+    "encryption_required",
 }
 
 _sleep = time.sleep  # indirection so tests can run without waiting
@@ -92,6 +97,7 @@ def utf16_units(text: str) -> int:
 class Message:
     text: str | None
     file: Path | None
+    allow_non_e2ee: bool = False  # False: every send carries --require-e2ee
 
     def steps(self) -> list[str]:
         return [name for name, present in (("text", self.text), ("file", self.file)) if present]
@@ -118,6 +124,8 @@ def plan_hash(chat_ids: list[str], message: Message) -> str:
         "file_size": message.file.stat().st_size if message.file else None,
         "file_sha256": file_sha256(message.file) if message.file else None,
     }
+    if message.allow_non_e2ee:
+        payload["allow_non_e2ee"] = True
     blob = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
     return hashlib.sha256(blob).hexdigest()[:12]
 
@@ -189,14 +197,17 @@ def resolve_recipients(entries: list[str], config: Config) -> dict[str, Any]:
 def _send_one(chat_id: str, message: Message, config: Config) -> dict[str, Any]:
     """Send text then file to one chat. Never retries. Returns ``{status, ...}``."""
     delivered: list[str] = []
+    policy = [] if message.allow_non_e2ee else ["--require-e2ee"]
     for step in message.steps():
         if step == "text":
             result = runner.run_line(
-                ["send", chat_id, "--stdin", "--json"], stdin_text=message.text, config=config
+                ["send", chat_id, "--stdin", "--json", *policy],
+                stdin_text=message.text,
+                config=config,
             )
         else:
             result = runner.run_line(
-                ["send", chat_id, "--file", str(message.file), "--json"], config=config
+                ["send", chat_id, "--file", str(message.file), "--json", *policy], config=config
             )
         if not result.ok:
             error = result.error.to_dict() if result.error else {"kind": "error"}
@@ -263,6 +274,12 @@ def build_parser() -> argparse.ArgumentParser:
     source.add_argument("--stdin", action="store_true", help="read the message text from stdin")
     parser.add_argument("--file", metavar="PATH", help="also send this file (up to 20 MiB)")
     parser.add_argument(
+        "--allow-non-e2ee",
+        action="store_true",
+        help="do not pass --require-e2ee: chats without end-to-end encryption get the message "
+        "over HTTPS/TLS, which LINE can read (only after the user explicitly accepted that)",
+    )
+    parser.add_argument(
         "--delay",
         type=float,
         default=DEFAULT_DELAY,
@@ -315,7 +332,7 @@ def _load_message(args: argparse.Namespace) -> tuple[Message | None, str | None]
         file = file.resolve()
     if text is None and file is None:
         return None, "give the message with --text or --stdin (and/or --file)"
-    return Message(text, file), None
+    return Message(text, file, allow_non_e2ee=args.allow_non_e2ee), None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -363,6 +380,7 @@ def main(argv: list[str] | None = None) -> int:
             else None
         ),
         "steps_per_recipient": message.steps(),
+        "require_e2ee": not message.allow_non_e2ee,
         "delay_seconds": args.delay,
         "recipients": resolved,
         "unresolved": unresolved,
